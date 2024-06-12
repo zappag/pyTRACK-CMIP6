@@ -34,6 +34,10 @@ class cmip6_indat(object):
         return str(len(self.data.variables['lon'][:])), \
                 str(len(self.data.variables['lat'][:]))
 
+    def get_yy(self):
+        # returns the latitudes 
+        return  self.data.variables['lat'][:]
+    
     def get_grid_type(self):
         # returns the grid type
         return cdo.griddes(input=self.filename)[3]
@@ -298,18 +302,20 @@ def track_mslp(input, outdirectory, NH=True, netcdf=True, ysplit=False):
     if "psl" not in data.vars:
         raise Exception("Invalid input variable type. Please input CMIP6 psl file.")
 
-    extr = tempname[:-3] + "_extr.nc"
-
     # remove unnecessary variables
-    if "time_bnds" in data.vars:
-        ncks = "time_bnds"
-        if "lat_bnds" in data.vars:
-            ncks += ",lat_bnds,lon_bnds"
-        os.system("ncks -C -O -x -v " + ncks + " " + tempname + " " + extr)
-    elif "lat_bnds" in data.vars:
-        os.system("ncks -C -O -x -v lat_bnds,lon_bnds " + tempname + " " + extr)
-    else:
-        extr = tempname
+    extr = tempname[:-3] + "_extr.nc"
+    remove_unnecessary_vars(tempname,extr)
+    
+    # # remove unnecessary variables
+    # if "time_bnds" in data.vars:
+    #     ncks = "time_bnds"
+    #     if "lat_bnds" in data.vars:
+    #         ncks += ",lat_bnds,lon_bnds"
+    #     os.system("ncks -C -O -x -v " + ncks + " " + tempname + " " + extr)
+    # elif "lat_bnds" in data.vars:
+    #     os.system("ncks -C -O -x -v lat_bnds,lon_bnds " + tempname + " " + extr)
+    # else:
+    #     extr = tempname
 
     print("Starting preprocessing.")
 
@@ -509,15 +515,19 @@ def track_uv_vor850(infile, outdirectory, infile2='none', NH=True, netcdf=True, 
 
     # remove unnecessary variables
     extr = tempname[:-3] + "_extr.nc"
-    if "time_bnds" in data.vars:
-        ncks = "time_bnds"
-        if "lat_bnds" in data.vars:
-            ncks += ",lat_bnds,lon_bnds"
-        os.system("ncks -C -O -x -v " + ncks + " " + tempname + " " + extr)
-    elif "lat_bnds" in data.vars:
-        os.system("ncks -C -O -x -v lat_bnds,lon_bnds " + tempname + " " + extr)
-    else:
-        extr = tempname
+    remove_unnecessary_vars(tempname,extr)
+    
+    # # remove unnecessary variables
+    # extr = tempname[:-3] + "_extr.nc"
+    # if "time_bnds" in data.vars:
+    #     ncks = "time_bnds"
+    #     if "lat_bnds" in data.vars:
+    #         ncks += ",lat_bnds,lon_bnds"
+    #     os.system("ncks -C -O -x -v " + ncks + " " + tempname + " " + extr)
+    # elif "lat_bnds" in data.vars:
+    #     os.system("ncks -C -O -x -v lat_bnds,lon_bnds " + tempname + " " + extr)
+    # else:
+    #     extr = tempname
 
     gridtype = data.get_grid_type()
     # check if regridding is needed, do nothing if already gaussian
@@ -1032,7 +1042,55 @@ def track_stats(dirname,tracksname,ext):
     subprocess.run(["rm", outdat + "disp_trs." + ext])
     subprocess.run(["rm", outdat + "ff_trs." + ext])
     subprocess.run(["rm", outdat + "ff_trs." + ext + '.nc'])
+
+def add_field(input,tr_file,radius,operation):
+
+    # link to indat directory
+    indat=str(Path.home()) + "/track-master/indat/"
+    tempname = "temp_file.nc"
+    os.system("ln -fs " + input + " " + indat + " " + tempname)
+
+    # remove unnecessary variables from input
+    extr = tempname[:-3] + "_extr.nc"
+    remove_unncessary_vars(tempname,extr)
+
+    # remove unnecessary lats from input
+    extr2 = extr[:-7] + "extr2.nc"
+    remove_equator_pole(extr,extr2)
+
+
+    # adapt add input file
+
     
+    # run add field
+
+def remove_unnecessary_vars(infile,outfile):
+    # remove unnecessary variables
+
+    data = cmip6_indat(infile)
+    
+    if "time_bnds" in data.vars:
+        ncks = "time_bnds"
+        if "lat_bnds" in data.vars:
+            ncks += ",lat_bnds,lon_bnds"
+        os.system("ncks -C -O -x -v " + ncks + " " + infile + " " + outfile)
+    elif "lat_bnds" in data.vars:
+        os.system("ncks -C -O -x -v lat_bnds,lon_bnds " + infile + " " + outfile)
+    else:
+        outfile = infile
+
     return
-    
+
+def remove_equator_pole(infile,outfile):
+    # remove equator and poles, if present
+
+    data = cmip6_indat(infile)
+    lats = data.get_yy()
+    avoidlats = {-90,0 90}
+    if set(lats) & avoidlats:        
+        os.system("ncks -d lat,0.1,89.9 " + infile + " " + outfile)
+    else:
+        outfile = infile
+
+    return
     

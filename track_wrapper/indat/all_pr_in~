@@ -1,0 +1,24 @@
+#!/bin/csh -xv                                                                                                    
+
+set FIELD = $1
+
+set DIR=$2
+
+set BASE=$3
+
+set EXT=$4
+
+set VAR=tr_trs_$FIELD
+
+set STUB=$FIELD
+
+if ( -e ${DIR}/STATOUT_$STUB) then
+
+ rm ${DIR}/STATOUT_$STUB
+
+endif
+
+run_stats -c=$DIR -d=STAT_FILE -e=track.linux -f=$EXT -i=tr_trs_$STUB -o=${BASE}
+#run_stats_slurm -c=$DIR -d=STAT_FILE -e=track.linux -f=$EXT -i=tr_trs_$STUB -o=${BASE}                           
+
+
