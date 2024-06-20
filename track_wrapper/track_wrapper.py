@@ -490,9 +490,6 @@ def track_uv_vor850(infile, outdirectory, infile2='none', NH=True, netcdf=True, 
     os.system("ln -fs " + input + " " + str(Path.home()) + "/track-master/" +
               tempname)
 
-    #os.system("cp '" + filled + "' " + str(Path.home()) + "/track-master/" +
-    #          tempname)
-    #os.system("rm '" + filled + "'")
     print("Data linked into TRACK/indat directory.")
 
     # change working directory
@@ -635,6 +632,9 @@ def track_uv_vor850(infile, outdirectory, infile2='none', NH=True, netcdf=True, 
         os.system(line_5)
 
         # cleanup
+        os.system("cp '" + filled + "' " + str(Path.home()) + "/track-master/" +
+             tempname)
+        os.system("rm '" + filled + "'")
         os.system("rm indat/"+year_file)
 
         print("Turning track output to netCDF...")
