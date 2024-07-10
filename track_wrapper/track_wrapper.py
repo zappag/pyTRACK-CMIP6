@@ -944,11 +944,11 @@ def track_era5_vor850(input, outdirectory, infile2, NH=True, netcdf=True, ysplit
                 " " + filled)
         print("Filled missing values, if any.")
 
-  # create link of data to TRACK indat directory
+    # create link of data to TRACK indat directory
     print('Linking data to TRACK/indat')
     os.system("ln -fs '" + filled + "' " + str(Path.home()) + "/track-master/indat/" + input_basename)
 
- # change working directory
+    # change working directory
     cwd = os.getcwd()
     os.chdir(str(Path.home()) + "/track-master")
 
@@ -1033,19 +1033,10 @@ def track_era5_vor850(input, outdirectory, infile2, NH=True, netcdf=True, ysplit
         os.system(line_4)
 
         print("Running TRACK...")
-
         os.system(line_5)
 
         print("Converting steps to dates")
         steps_to_dates(outdir + "/" + c_input, "indat/"+year_file)
-
-        # cleanup
-        os.system("rm indat/"+year_file)
-        os.system("rm indat/"+fname)
-        os.system("rm indat/"+vor850_temp_name)
-        #os.system("mv '" + input + "' " + str(Path.home()) + "/track-master/" + tempname)
-        #os.system("rm '" + input + "'")
-        #os.system("rm indat/"+year_file)
 
         if netcdf == True:
             print("Turning track output to netCDF...")
@@ -1056,6 +1047,11 @@ def track_era5_vor850(input, outdirectory, infile2, NH=True, netcdf=True, ysplit
             tr2nc_vor(outdir + "/" + c_input + "/ff_trs_neg")
             tr2nc_vor(outdir + "/" + c_input + "/tr_trs_pos")
             tr2nc_vor(outdir + "/" + c_input + "/tr_trs_neg")
+
+        # cleanup
+        os.system("rm indat/"+year_file)
+        os.system("rm indat/"+fname)
+        os.system("rm indat/"+vor850_temp_name)
 
     os.chdir(cwd)
     return
