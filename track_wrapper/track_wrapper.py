@@ -817,7 +817,6 @@ def track_era5_mslp(input, outdirectory, NH=True, netcdf=True, ysplit=False):
         if ysplit:
             print("Splitting: " + year)
             year_file = input_basename[:-3] + "_" + year + ".nc"
-            #cdo.selyear(year, input="indat/"+tempname, output="indat/"+year_file)
             cdo.selyear(year, input="indat/"+input_basename, output="indat/"+year_file)
             c_input = year + "_" + hemisphere + "_" + input_basename[:-3]
         else:
@@ -830,7 +829,8 @@ def track_era5_mslp(input, outdirectory, NH=True, netcdf=True, ysplit=False):
 
         # spectral filtering
         # NOTE: NORTHERN HEMISPHERE; add SH option???
-        fname = "T63filt_" + year + ".dat"
+        fname = "T63filt_" + c_input +  ".dat"
+        
         line_1 = "sed -e \"s/NX/" + nx + "/;s/NY/" + ny + \
                     "/;s/TRUNC/63/\" specfilt_nc.in > spec.test"
         line_3 = "mv outdat/specfil.y" + year + "_band001 indat/" + fname
@@ -866,7 +866,8 @@ def track_era5_mslp(input, outdirectory, NH=True, netcdf=True, ysplit=False):
 
         # cleanup
         os.system("rm indat/"+year_file)
-        
+        os.system("rm indat/"+fname)
+
         if netcdf == True:
             print("Turning track output to netCDF...")
             # tr2nc - turn tracks into netCDF files
@@ -875,7 +876,6 @@ def track_era5_mslp(input, outdirectory, NH=True, netcdf=True, ysplit=False):
             tr2nc_mslp(outdir + "/" + c_input + "/ff_trs_neg")
             tr2nc_mslp(outdir + "/" + c_input + "/tr_trs_neg")
 
-    os.system("rm indat/" + input_basename)
     os.chdir(cwd)
 
     return
