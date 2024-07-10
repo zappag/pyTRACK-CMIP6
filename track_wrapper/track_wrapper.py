@@ -10,7 +10,7 @@ cdo = Cdo()
 
 __all__ = ['cmip6_indat', 'regrid_cmip6', 'setup_files', 'calc_vorticity',
            'track_mslp', 'track_uv_vor850', 'setup_tr2nc', 'track_era5_mslp',
-           'track_era5_vor850', 'tr2nc_mslp', 'tr2nc_vor','track_stats']
+           'track_era5_vor850', 'tr2nc_mslp', 'tr2nc_vor','track_stats','steps_to_dates']
 
 class cmip6_indat(object):
     """Class to obtain basic information about the CMIP6 input data."""
@@ -101,10 +101,46 @@ def setup_tr2nc():
     os.chdir(cwd)
     return
 
-def step_to_dates(track_output, filename):
+def steps_to_dates(track_output_dir, filename):
     
-    #./track-master/utils/bin/count
-    #count [filname] [Lat.] [Lng.] [Rad.] [Genesis (0)/Lysis (1)/Passing(2)/Passing Time(3)/All Times(4)] [Negate (1)] [Start Time, YYYYMMDDHH] [tstep]
+    # read the the first date and time in the .nc file
+    sdate = subprocess.check_output(f"cdo showdate {filename} | head -n 1 | awk '{{print $1}}'", shell=True)
+    sdate = sdate.decode('utf-8').strip()
+    
+    # first hour
+    stime1 = subprocess.check_output(f"cdo showtime {filename} | head -n 1 | awk '{{print $1}}'", shell=True)
+    stime1 = stime1.decode('utf-8').strip()
+
+    # second hour
+    stime2 = subprocess.check_output(f"cdo showtime {filename} | head -n 1 | awk '{{print $2}}'", shell=True)
+    stime2 = stime2.decode('utf-8').strip()
+
+    # convert initial date to string for util/count, in format YYYYMMDDHH
+    timestring=sdate[0:4]+sdate[5:7]+sdate[8:10]+stime1[0:2]
+    print(f"Time string of initial step is: {timestring}")
+
+    # determine increment in hours
+    timedelta=int(stime2[0:2])-int(stime1[0:2])
+    print(f"Time incrment is {timedelta}h")
+
+    # make subidrectories with dates
+    os.system(f"mkdir -p {track_output_dir}/dates")
+
+    # count command: [filname] [Lat.] [Lng.] [Rad.] [Genesis (0)/Lysis (1)/Passing(2)/Passing Time(3)/All Times(4)] [Negate (1)] [Start Time, YYYYMMDDHH] [tstep]
+    tr_fname=f"{track_output_dir}/tr_trs_pos"
+    os.system("gzip -d " + tr_fname + ".gz")
+    count=str(Path.home()) + "/track-master/utils/bin/count " + tr_fname + " 0 0 5 4 0 "  + timestring + " " + str(timedelta)
+    os.system(f"{count} ")
+
+    ff_fname=f"{track_output_dir}/ff_trs_pos"
+    os.system("gzip -d " + ff_fname + ".gz")
+    count=str(Path.home()) + "/track-master/utils/bin/count " + ff_fname + " 0 0 5 4 0 "  + timestring + " " + str(timedelta)
+    os.system(f"{count} ")
+
+    # move files to dates subdirectories
+    os.system(f"mv {tr_fname}.new {track_output_dir}/dates/tr_trs_pos")
+    os.system(f"mv {ff_fname}.new {track_output_dir}/dates/ff_trs_pos")
+
     return
 #
 # =======================
@@ -743,7 +779,6 @@ def track_era5_mslp(input, outdirectory, NH=True, netcdf=True):
     outdir = os.path.abspath(os.path.expanduser(outdirectory))
     input_basename = os.path.basename(input)
     
-
     if input_basename[-3:] == ".nc":
         data = Dataset(input, 'r')
     elif input_basename[-4:] == ".grb":
@@ -822,9 +857,11 @@ def track_era5_mslp(input, outdirectory, NH=True, netcdf=True):
         print("Running TRACK...")
         os.system(line_5)
 
+        print("Converting steps to dates")
+        steps_to_dates(outdir + "/" + c_input, "indat/"+year_file )
+
         # cleanup
         os.system("rm indat/"+year_file)
-
         
         if netcdf == True:
             print("Turning track output to netCDF...")
