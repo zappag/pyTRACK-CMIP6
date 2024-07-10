@@ -1,6 +1,7 @@
 import os
 from cdo import *
 from netCDF4 import Dataset
+import cfgrib
 from pathlib import Path
 from math import ceil
 import subprocess
@@ -100,13 +101,18 @@ def setup_tr2nc():
     os.chdir(cwd)
     return
 
+def step_to_dates(track_output, filename):
+    
+    #./track-master/utils/bin/count
+    #count [filname] [Lat.] [Lng.] [Rad.] [Genesis (0)/Lysis (1)/Passing(2)/Passing Time(3)/All Times(4)] [Negate (1)] [Start Time, YYYYMMDDHH] [tstep]
+    return
 #
 # =======================
 # PREPROCESSING FUNCTIONS
 # =======================
 #
 
-def merge_uv(file1, file2, outfile):
+def merge_uv_CMIP6(file1, file2, outfile):
     """
     Merge CMIP6 U and V files into a UV file.
 
@@ -141,6 +147,64 @@ def merge_uv(file1, file2, outfile):
     cdo.merge(input=" ".join((u_file, v_file)), output=outfile)
     print("Merged U and V files into UV file.")
     return
+
+def merge_uv_ERA5(file1, file2, outfile):
+    """
+    Merge CMIP6 U and V files into a UV file.
+
+    Parameters
+    ----------
+
+    file1 : string
+        Path to .nc file containing either U or V data
+
+    file2 : string
+        Path to .nc file containing either V or U data, opposite of file1
+
+    outfile : string
+        Path of desired output file
+
+
+    """
+    data1 = cmip6_indat(file1)
+    data2 = cmip6_indat(file2)
+
+    if data1.get_variable_type() == 'u':
+        u_file = file1
+        v_file = file2
+
+    elif data1.get_variable_type() == 'v':
+        u_file = file2
+        v_file = file1
+
+    else:
+        raise Exception("Invalid input variable type. Please input ERA5 \
+                            u or v file.")
+
+    # Create temporary directory one folder back
+    temp_dir = os.path.join(os.path.dirname(os.path.dirname(file1)), 'temp_uv')
+    if not os.path.exists(temp_dir):
+        os.makedirs(temp_dir)
+
+    # Set the output file path in the temporary directory
+    outfile = os.path.join(temp_dir, os.path.basename(outfile))
+
+    # Check if the merged file already exists
+    if os.path.isfile(outfile):
+        print("Merged U and V file already exists, found file: ", outfile)
+        
+    elif os.path.isfile(outfile[:-3] + "_filled.nc"):
+        print("Merged U and V file already exists, found file: ", outfile[:-3] + "_filled.nc")
+        outfile = outfile[:-3] + "_filled.nc"
+        
+    else:
+        print("Merging u&v files")
+        cdo.merge(input=" ".join((u_file, v_file)), output=outfile)
+        print("Merged U and V files into UV file named: ", outfile)
+        
+    return outfile, temp_dir
+
+
 
 def regrid_cmip6(input, outfile):
     """
@@ -224,27 +288,30 @@ def calc_vorticity(uv_file, outfile, copy_file=True, cmip6=True):
     else:
         uv = Dataset(uv_file, 'r')
         vars = [var for var in uv.variables]
-        nx = str(len(uv.variables['lon'][:]))
-        ny = str(len(uv.variables['lat'][:]))
+        nx = str(len(uv.variables['longitude'][:]))
+        ny = str(len(uv.variables['latitude'][:]))
         u_name = vars[-2]
         v_name = vars[-1]
-
+        
+    tempname = "temp_file.nc"
+    
     if copy_file == True: # copy input data to TRACK/indat directory
-        tempname = "temp_file.nc"
+
         os.system("cp " + uv_file + " " + str(Path.home()) + 
                     "/track-master/indat/" + tempname)
     else: # if uv_file is already in the track-master/indat directory
-        tempname = os.path.basename(uv_file)
 
+        os.system("ln -fs " + uv_file + " " + str(Path.home()) + "/track-master/indat/" + tempname)
+        
     os.chdir(str(Path.home()) + "/track-master") # change to track-master directory
 
     # generate input file and calculate vorticity using TRACK
     os.system("sed -e \"s/VAR1/"+ u_name + "/;s/VAR2/" + v_name + "/;s/NX/" +
                 nx + "/;s/NY/" + ny + "/;s/LEV/85000/;s/VOR/" + outfile +
-                "/\" calcvor.in > calcvor.test")
+                "/\" calcvor_onelev.in > calcvor.test")
     os.system("bin/track.linux -i " + tempname + " -f y" + year + " < calcvor.test")
 
-    os.system("rm indat/" + tempname) # cleanup
+    #os.system("rm indat/" + tempname) # cleanup
     os.chdir(cwd) # change back to working directory
 
     return
@@ -275,7 +342,8 @@ def track_mslp(input, outdirectory, NH=True, netcdf=True, ysplit=False):
     netcdf : boolean, optional
         If true, converts TRACK output to netCDF format using TR2NC utility.
 
-    ysplit : boolean
+    ysplit : boolean, default is false
+        If true, splits the years into separate files for tracking.
 
     """
     outdir = os.path.abspath(os.path.expanduser(outdirectory))
@@ -479,7 +547,7 @@ def track_uv_vor850(infile, outdirectory, infile2='none', NH=True, netcdf=True, 
         input = infile
 
     else: # if U and V separate, merge into UV file
-        merge_uv(infile, infile2, infile[:-3] + "_merged.nc")
+        merge_uv_CMIP6(infile, infile2, infile[:-3] + "_merged.nc")
         input = infile[:-3] + "_merged.nc"
 
     input_basename = os.path.basename(input)
@@ -637,8 +705,8 @@ def track_uv_vor850(infile, outdirectory, infile2='none', NH=True, netcdf=True, 
         os.system("rm '" + filled + "'")
         os.system("rm indat/"+year_file)
 
-        print("Turning track output to netCDF...")
         if netcdf == True:
+            print("Turning track output to netCDF...")
             # tr2nc - turn tracks into netCDF files
             os.system("gunzip '" + outdir + "'/" + c_input + "/ff_trs_*")
             os.system("gunzip '" + outdir + "'/" + c_input + "/tr_trs_*")
@@ -674,10 +742,18 @@ def track_era5_mslp(input, outdirectory, NH=True, netcdf=True):
     """
     outdir = os.path.abspath(os.path.expanduser(outdirectory))
     input_basename = os.path.basename(input)
-    data = Dataset(input, 'r')
+    
+
+    if input_basename[-3:] == ".nc":
+        data = Dataset(input, 'r')
+    elif input_basename[-4:] == ".grb":
+        data = cfgrib.open_dataset(input)
+    else:
+        raise Exception("Invalid input file type. Please input a .nc or .grb file.")
+    
     vars = [var for var in data.variables]
-    nx = str(len(data.variables['lon'][:]))
-    ny = str(len(data.variables['lat'][:]))
+    nx = str(len(data.variables['longitude'][:]))
+    ny = str(len(data.variables['latitude'][:]))
 
     if vars[-1] != "msl":
         raise Exception("Invalid input variable type. Please input ERA5 mslp file.")
@@ -749,8 +825,9 @@ def track_era5_mslp(input, outdirectory, NH=True, netcdf=True):
         # cleanup
         os.system("rm indat/"+year_file)
 
-        print("Turning track output to netCDF...")
+        
         if netcdf == True:
+            print("Turning track output to netCDF...")
             # tr2nc - turn tracks into netCDF files
             os.system("gunzip '" + outdir + "/" + c_input + "/ff_trs_neg.gz'")
             os.system("gunzip '" + outdir + "/" + c_input + "/tr_trs_neg.gz'")
@@ -762,7 +839,7 @@ def track_era5_mslp(input, outdirectory, NH=True, netcdf=True):
 
     return
 
-def track_era5_vor850(input, outdirectory, NH=True, netcdf=True):
+def track_era5_vor850(input, outdirectory, infile2, NH=True, netcdf=True, ysplit=False):
 
     """
     Calculate 850 hPa vorticity from ERA5 horizontal wind velocity data
@@ -783,32 +860,70 @@ def track_era5_vor850(input, outdirectory, NH=True, netcdf=True):
 
     netcdf : boolean, optional
         If true, converts TRACK output to netCDF format using TR2NC utility.
+        
+    ysplit : boolean, default is false
+        If true, splits the years into separate files for tracking.
 
     """
-    outdir = os.path.abspath(os.path.expanduser(outdirectory))
+    outdir = os.path.abspath(outdirectory)
+    
+
+    if infile2 is not 'none':
+        outfile_uv = input[:-3] + "_merged.nc"
+        outfile_uv = outfile_uv.replace("_u_", "_uv_")
+        outfile_uv, tempdir = merge_uv_ERA5(input, infile2, outfile_uv)
+        input = os.path.join(tempdir, os.path.basename(outfile_uv))
+            
+    print("input file for wind is: ", input)
+            
     input_basename = os.path.basename(input)
-    data = Dataset(input, 'r')
+
+    if input_basename[-3:] == ".nc":
+        data = Dataset(input, 'r')
+    else:
+        raise Exception("Invalid input file type. Please input a netCDF file.")
+    
     vars = [var for var in data.variables]
-    nx = str(len(data.variables['lon'][:]))
-    ny = str(len(data.variables['lat'][:]))
+    nx = str(len(data.variables['longitude'][:]))
+    ny = str(len(data.variables['latitude'][:]))
 
-    if (vars[-1] != "var132") or (vars[-2] != "var131"):
-        raise Exception("Invalid input variable type. Please input " +
-                            "a UV file from ERA5.")
-
-    years = cdo.showyear(input=input)[0].split()
+    if (vars[-1] != "v") or (vars[-2] != "u"):
+        raise Exception("Invalid input variable type. Please input a UV file from ERA5.")
 
     # copy data into TRACK indat directory
     ## files need to be moved to TRACK directory for TRACK to find them
-    tempname = "temp_file.nc"
-    os.system("cp '" + input + "' " + str(Path.home()) + "/track-master/indat/" +
+    tempname = "indat/temp_file.nc"
+    os.system("ln -fs " + input + " " + str(Path.home()) + "/track-master/" +
               tempname)
-    print("Data copied into TRACK/indat directory.")
+
+    print("Data linked into TRACK/indat directory.")
 
     # change working directory
     cwd = os.getcwd()
     os.chdir(str(Path.home()) + "/track-master")
 
+    print("Starting preprocessing.")
+    print("Fill missing values.")
+    # fill missing values
+    
+    filled = input[:-3] + "_filled.nc"
+    print("Filled file is: ", filled)
+    if os.path.isfile(filled):
+        print("Filled file already exists.")
+    else:
+        os.system("ncatted -a _FillValue,,d,, -a missing_value,,d,, " + input +
+                " " + filled)
+        print("Filled missing values, if any.")
+
+    years = cdo.showyear(input=filled)[0].split()
+    print("Years: ", years)
+    
+
+    ## GZ+
+    if ysplit:
+        years = years[-1]
+    ## GZ-
+    
     if NH == True:
         hemisphere = "NH"
     else:
@@ -816,38 +931,65 @@ def track_era5_vor850(input, outdirectory, NH=True, netcdf=True):
 
     # do tracking for one year at a time
     for year in years:
-        print(year + "...")
+        print("Running TRACK for year: " + year + "...")
 
         # select year from data
         year_file = 'tempyear.nc'
-        cdo.selyear(year, input="indat/"+tempname, output="indat/"+year_file)
+        # GZ+
+        if ysplit:
+            print ("Linking file: ", filled)
+            os.system("ln -fs " + filled + " indat/"+year_file)
+        else:
+            cdo.selyear(year, input=filled, output="indat/"+year_file)
 
         # get number of timesteps and number of chunks for tracking
-        ntime = int(len(data.variables['time'][:]))
-        nchunks = ceil(ntime/62)
+        #data = cmip6_indat("indat/"+year_file)
+        #ntime = data.get_timesteps()
+        #nchunks = ceil(ntime/62)
 
         # calculate vorticity from UV
-        tempname = "vor850_temp.dat"
-        calc_vorticity("./indat/"+year_file, tempname, copy_file=False,
-                        cmip6=False)
-        year_file = tempname
-        c_input = year + "_" + hemisphere + "_" + "_vor850_" + \
-                    input_basename[:-3]
+        var_name = "vor850"
+        vor850_temp_name = "vor850_temp.dat"
+        
+        calc_vorticity("./indat/"+year_file, vor850_temp_name, copy_file=False, cmip6=False)
+        raise SystemExit
+        year_file = vor850_temp_name
+        
+        # name for input file for TRACK
+        c_input = var_name + "_" + year + "_" + hemisphere
+                    
 
-        # spectral filtering, T42
+        # spectral filtering (vorticity)
+
+        # GZ+:  Enforce vorticity tracking at T42 resolution
+        
+        # if int(ny) >= 96: # T63
+        #     fname = "T63filt_" + year + ".dat"
+        #     line_1 = "sed -e \"s/NX/" + nx + "/;s/NY/" + ny + \
+        #                 "/;s/TRUNC/63/\" specfilt.in > spec.test"
+        #     line_3 = "mv outdat/specfil.y" + year + "_band001 indat/" + fname
+        #     # NH
+        #     line_5 = "master -c=" + c_input + " -e=track.linux -d=now -i=" + \
+        #                 fname + " -f=y" + year + \
+        #                 " -j=RUN_AT.in -k=initial.T63_" + hemisphere + \
+        #                 " -n=1,62," + str(nchunks) + " -o='" + outdir + \
+        #                 "' -r=RUN_AT_ -s=RUNDATIN.VOR"
+        # else: # T42
+        # GZ-
+        
         fname = "T42filt_" + year + ".dat"
         line_1 = "sed -e \"s/NX/" + nx + "/;s/NY/" + ny + \
-                    "/;s/TRUNC/42/\" specfilt.in > spec.test"
+            "/;s/TRUNC/42/\" specfilt.in > spec.test"
         line_3 = "mv outdat/specfil.y" + year + "_band001 indat/" + fname
         # NH
         line_5 = "master -c=" + c_input + " -e=track.linux -d=now -i=" + \
-                    fname + " -f=y" + year + \
-                    " -j=RUN_AT.in -k=initial.T42_" + hemisphere + \
-                    " -n=1,62," + \
-                    str(nchunks) + " -o='" + outdir + \
-                    "' -r=RUN_AT_ -s=RUNDATIN.VOR"
+            fname + " -f=y" + year + \
+            " -j=RUN_AT.in -k=initial.T42_" + hemisphere + \
+            " -n=1,62," + \
+            str(nchunks) + " -o='" + outdir + \
+            "' -r=RUN_AT_ -s=RUNDATIN.VOR"
 
-        line_2 = "bin/track.linux -i " + year_file + " -f y" + year + \
+        line_2 = "bin/track.linux -i " + c_input + " -f y" + year + \
                     " < spec.test"
         line_4 = "rm outdat/specfil.y" + year + "_band000"
 
@@ -868,12 +1010,15 @@ def track_era5_vor850(input, outdirectory, NH=True, netcdf=True):
         print("Running TRACK...")
 
         os.system(line_5)
-
+        raise SystemExit
         # cleanup
+        os.system("cp '" + input + "' " + str(Path.home()) + "/track-master/" +
+             tempname)
+        os.system("rm '" + input + "'")
         os.system("rm indat/"+year_file)
 
-        print("Turning track output to netCDF...")
         if netcdf == True:
+            print("Turning track output to netCDF...")
             # tr2nc - turn tracks into netCDF files
             os.system("gunzip '" + outdir + "'/" + c_input + "/ff_trs_*")
             os.system("gunzip '" + outdir + "'/" + c_input + "/tr_trs_*")
@@ -882,8 +1027,8 @@ def track_era5_vor850(input, outdirectory, NH=True, netcdf=True):
             tr2nc_vor(outdir + "/" + c_input + "/tr_trs_pos")
             tr2nc_vor(outdir + "/" + c_input + "/tr_trs_neg")
 
+    os.system("rm " + tempname)
     os.chdir(cwd)
-
     return
 
 
