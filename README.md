@@ -80,6 +80,14 @@ with the arguments being the same as for the CMIP6 wrapper functions above. For 
 
 If you wish to use the individual functions in this module outside of the wrappers, please refer to the documentation included in the `html` folder in this repository about details and usage.
 
+#### Modifying track wrapper functions
+
+If you wish to modify any of the track_wrapper functions or add your functions do not forgeto to run:
+
+pip install -e /path/to/pyTRACK
+
+to update pyTRACK after any modification.
+
 #### TRACK Output
 
 After running a wrapper function, if tracking succeeded, the output will be found in the specified output directory in the following format:
