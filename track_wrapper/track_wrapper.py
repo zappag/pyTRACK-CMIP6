@@ -755,7 +755,7 @@ def track_uv_vor850(infile, outdirectory, infile2='none', NH=True, netcdf=True, 
     os.chdir(cwd)
     return
 
-def track_era5_mslp(input, outdirectory, NH=True, netcdf=True):
+def track_era5_mslp(input, outdirectory, NH=True, netcdf=True, ysplit=False):
     """
     Run TRACK on ERA5 mean sea level pressure data.
 
@@ -795,12 +795,9 @@ def track_era5_mslp(input, outdirectory, NH=True, netcdf=True):
 
     years = cdo.showyear(input=input)[0].split()
 
-    # files need to be moved to TRACK directory for TRACK to find them
-    # copy data into TRACK indat directory
-    tempname = "temp_file.nc"
-    os.system("cp '" + input + "' " + str(Path.home()) + "/track-master/indat/" +
-              tempname)
-    print("Data copied into TRACK/indat directory.")
+    # create link of data to TRACK indat directory
+    os.system("ln -fs '" + input + "' " + str(Path.home()) + "/track-master/indat/" + input_basename)
+    print("Data linked into TRACK/indat directory.")
 
     # change working directory
     cwd = os.getcwd()
@@ -811,18 +808,25 @@ def track_era5_mslp(input, outdirectory, NH=True, netcdf=True):
     else:
         hemisphere = "SH"
 
+    if not ysplit:
+        years=[years[-1]]
+
     # do tracking for one year at a time
     for year in years:
-        print(year + "...")
-
         # select year from data
-        year_file = 'tempyear.nc'
-        cdo.selyear(year, input="indat/"+tempname, output="indat/"+year_file)
-
+        if ysplit:
+            print("Splitting: " + year)
+            year_file = input_basename[:-3] + "_" + year + ".nc"
+            #cdo.selyear(year, input="indat/"+tempname, output="indat/"+year_file)
+            cdo.selyear(year, input="indat/"+input_basename, output="indat/"+year_file)
+            c_input = year + "_" + hemisphere + "_" + input_basename[:-3]
+        else:
+            year_file=input_basename
+            c_input = hemisphere + "_" + input_basename[:-3]
+        
         # get number of timesteps and number of chunks for tracking
         ntime = int(len(data.variables['time'][:]))
         nchunks = ceil(ntime/62)
-        c_input = year + "_" + hemisphere + "_" + input_basename[:-3]
 
         # spectral filtering
         # NOTE: NORTHERN HEMISPHERE; add SH option???
@@ -871,7 +875,7 @@ def track_era5_mslp(input, outdirectory, NH=True, netcdf=True):
             tr2nc_mslp(outdir + "/" + c_input + "/ff_trs_neg")
             tr2nc_mslp(outdir + "/" + c_input + "/tr_trs_neg")
 
-    os.system("rm indat/" + tempname)
+    os.system("rm indat/" + input_basename)
     os.chdir(cwd)
 
     return
