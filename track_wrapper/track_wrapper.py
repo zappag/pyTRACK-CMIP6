@@ -101,7 +101,7 @@ def setup_tr2nc():
     os.chdir(cwd)
     return
 
-def steps_to_dates(track_output_dir, filename):
+def steps_to_dates(track_output_dir, filename, track_mins=False):
     
     # read the the first date and time in the .nc file
     sdate = subprocess.check_output(f"cdo showdate {filename} | head -n 1 | awk '{{print $1}}'", shell=True)
@@ -126,20 +126,38 @@ def steps_to_dates(track_output_dir, filename):
     # make subidrectories with dates
     os.system(f"mkdir -p {track_output_dir}/dates")
 
-    # count command: [filname] [Lat.] [Lng.] [Rad.] [Genesis (0)/Lysis (1)/Passing(2)/Passing Time(3)/All Times(4)] [Negate (1)] [Start Time, YYYYMMDDHH] [tstep]
-    tr_fname=f"{track_output_dir}/tr_trs_pos"
-    os.system("gzip -d " + tr_fname + ".gz")
-    count=str(Path.home()) + "/track-master/utils/bin/count " + tr_fname + " 0 0 5 4 0 "  + timestring + " " + str(timedelta)
-    os.system(f"{count} ")
+    if track_mins:
+        print("converting mins (neg files) to dates")
+        # count command: [filname] [Lat.] [Lng.] [Rad.] [Genesis (0)/Lysis (1)/Passing(2)/Passing Time(3)/All Times(4)] [Negate (1)] [Start Time, YYYYMMDDHH] [tstep]
+        tr_fname=f"{track_output_dir}/tr_trs_neg"
+        os.system("gzip -d " + tr_fname + ".gz")
+        count=str(Path.home()) + "/track-master/utils/bin/count " + tr_fname + " 0 0 5 4 0 "  + timestring + " " + str(timedelta)
+        os.system(f"{count} ")
 
-    ff_fname=f"{track_output_dir}/ff_trs_pos"
-    os.system("gzip -d " + ff_fname + ".gz")
-    count=str(Path.home()) + "/track-master/utils/bin/count " + ff_fname + " 0 0 5 4 0 "  + timestring + " " + str(timedelta)
-    os.system(f"{count} ")
+        ff_fname=f"{track_output_dir}/ff_trs_neg"
+        os.system("gzip -d " + ff_fname + ".gz")
+        count=str(Path.home()) + "/track-master/utils/bin/count " + ff_fname + " 0 0 5 4 0 "  + timestring + " " + str(timedelta)
+        os.system(f"{count} ")
 
-    # move files to dates subdirectories
-    os.system(f"mv {tr_fname}.new {track_output_dir}/dates/tr_trs_pos")
-    os.system(f"mv {ff_fname}.new {track_output_dir}/dates/ff_trs_pos")
+        # move files to dates subdirectories
+        os.system(f"mv {tr_fname}.new {track_output_dir}/dates/tr_trs_neg")
+        os.system(f"mv {ff_fname}.new {track_output_dir}/dates/ff_trs_neg")
+    else:
+        print("converting max (pos files) to dates")
+        # count command: [filname] [Lat.] [Lng.] [Rad.] [Genesis (0)/Lysis (1)/Passing(2)/Passing Time(3)/All Times(4)] [Negate (1)] [Start Time, YYYYMMDDHH] [tstep]
+        tr_fname=f"{track_output_dir}/tr_trs_pos"
+        os.system("gzip -d " + tr_fname + ".gz")
+        count=str(Path.home()) + "/track-master/utils/bin/count " + tr_fname + " 0 0 5 4 0 "  + timestring + " " + str(timedelta)
+        os.system(f"{count} ")
+
+        ff_fname=f"{track_output_dir}/ff_trs_pos"
+        os.system("gzip -d " + ff_fname + ".gz")
+        count=str(Path.home()) + "/track-master/utils/bin/count " + ff_fname + " 0 0 5 4 0 "  + timestring + " " + str(timedelta)
+        os.system(f"{count} ")
+
+        # move files to dates subdirectories
+        os.system(f"mv {tr_fname}.new {track_output_dir}/dates/tr_trs_pos")
+        os.system(f"mv {ff_fname}.new {track_output_dir}/dates/ff_trs_pos")
 
     return
 #
@@ -863,7 +881,9 @@ def track_era5_mslp(input, outdirectory, NH=True, netcdf=True, ysplit=False):
         os.system(line_5)
 
         print("Converting steps to dates")
-        steps_to_dates(outdir + "/" + c_input, "indat/"+year_file )
+        
+        # set track mins to True to convert only the minimum of mslp
+        steps_to_dates(outdir + "/" + c_input, "indat/"+year_file, track_mins=True)
 
         # cleanup
         os.system("rm indat/"+year_file)
