@@ -351,6 +351,9 @@ def calc_vorticity(uv_file, outfile, copy_file=True, cmip6=True):
     #tempname = "temp_file.nc"
     tempname = os.path.basename(uv_file)
 
+    # removing .dat to create extension
+    ext=outfile[:-4]
+
     # if copy_file == True: # copy input data to TRACK/indat directory
 
     #     os.system("cp " + uv_file + " " + str(Path.home()) + 
@@ -365,7 +368,7 @@ def calc_vorticity(uv_file, outfile, copy_file=True, cmip6=True):
     os.system("sed -e \"s/VAR1/"+ u_name + "/;s/VAR2/" + v_name + "/;s/NX/" +
                 nx + "/;s/NY/" + ny + "/;s/LEV/85000/;s/VOR/" + outfile +
                 "/\" calcvor_onelev.in > calcvor.test")
-    os.system("bin/track.linux -i " + tempname + " -f y" + year + " < calcvor.test")
+    os.system("bin/track.linux -i " + tempname + " -f " + ext + " < calcvor.test")
 
     os.chdir(cwd) # change back to working directory
 
@@ -1035,18 +1038,18 @@ def track_era5_vor850(input, outdirectory, infile2, NH=True, netcdf=True, ysplit
         fname = "T42filt_" + vor850_temp_name + ".dat"
         line_1 = "sed -e \"s/NX/" + nx + "/;s/NY/" + ny + \
             "/;s/TRUNC/42/\" specfilt.in > spec.test"
-        line_3 = "mv outdat/specfil.y" + year + "_band001 indat/" + fname
+        line_3 = "mv outdat/specfil." + ext + "_band001 indat/" + fname
         # NH
         line_5 = "master -c=" + c_input + " -e=track.linux -d=now -i=" + \
-            fname + " -f=y" + year + \
+            fname + " -f=" + ext + \
             " -j=RUN_AT.in -k=initial.T42_" + hemisphere + \
             " -n=1,62," + \
             str(nchunks) + " -o='" + outdir + \
             "' -r=RUN_AT_ -s=RUNDATIN.VOR"
 
-        line_2 = "bin/track.linux -i " + vor850_temp_name + " -f y" + year + \
+        line_2 = "bin/track.linux -i " + vor850_temp_name + " -f " + ext + \
                     " < spec.test"
-        line_4 = "rm outdat/specfil.y" + year + "_band000"
+        line_4 = "rm outdat/specfil." + ext + "_band000 outdat/interp_th." + ext
 
         # setting environment variables
         os.environ["CC"] = "gcc"
@@ -1060,7 +1063,6 @@ def track_era5_vor850(input, outdirectory, infile2, NH=True, netcdf=True, ysplit
         os.system(line_1)
         os.system(line_2)
         os.system(line_3)
-        os.system(line_4)
 
         print("Running TRACK...")
         os.system(line_5)
@@ -1068,20 +1070,27 @@ def track_era5_vor850(input, outdirectory, infile2, NH=True, netcdf=True, ysplit
         print("Converting steps to dates")
         steps_to_dates(outdir + "/" + c_input, "indat/"+year_file)
 
-        if netcdf == True:
-            print("Turning track output to netCDF...")
-            # tr2nc - turn tracks into netCDF files
-            os.system("gunzip '" + outdir + "'/" + c_input + "/ff_trs_*")
-            os.system("gunzip '" + outdir + "'/" + c_input + "/tr_trs_*")
-            tr2nc_vor(outdir + "/" + c_input + "/ff_trs_pos")
-            tr2nc_vor(outdir + "/" + c_input + "/ff_trs_neg")
-            tr2nc_vor(outdir + "/" + c_input + "/tr_trs_pos")
-            tr2nc_vor(outdir + "/" + c_input + "/tr_trs_neg")
+        # move .nc output to outdir
+        os.system("mv outdat/ff_trs." + ext + ".nc " + outdir + "/" + c_input + "/.")
+        os.system("mv outdat/tr_trs." + ext + ".nc " + outdir + "/" + c_input + "/.")
+
+        # if netcdf == True:
+        #     print("Turning track output to netCDF...")
+        #     # tr2nc - turn tracks into netCDF files
+        #     os.system("gunzip '" + outdir + "'/" + c_input + "/ff_trs_*")
+        #     os.system("gunzip '" + outdir + "'/" + c_input + "/tr_trs_*")
+        #     tr2nc_vor(outdir + "/" + c_input + "/ff_trs_pos")
+        #     tr2nc_vor(outdir + "/" + c_input + "/ff_trs_neg")
+        #     tr2nc_vor(outdir + "/" + c_input + "/tr_trs_pos")
+        #     tr2nc_vor(outdir + "/" + c_input + "/tr_trs_neg")
 
         # cleanup
         os.system("rm indat/"+year_file)
         os.system("rm indat/"+fname)
         os.system("rm indat/"+vor850_temp_name)
+        os.system(line_4)
+        os.system("rm outdat/initial.vor850_" + c_input)
+
 
     os.chdir(cwd)
     return
