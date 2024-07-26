@@ -831,20 +831,21 @@ def track_era5_mslp(input, outdirectory, NH=True, netcdf=True, ysplit=False):
         # spectral filtering
         # NOTE: NORTHERN HEMISPHERE; add SH option???
         fname = "T63filt_" + c_input +  ".dat"
+        ext=c_input
         
         line_1 = "sed -e \"s/NX/" + nx + "/;s/NY/" + ny + \
                     "/;s/TRUNC/63/\" specfilt_nc.in > spec.test"
-        line_3 = "mv outdat/specfil.y" + year + "_band001 indat/" + fname
+        line_3 = "mv outdat/specfil." + ext + "_band001 indat/" + fname
         # NH
         line_5 = "master -c=" + c_input + " -e=track.linux -d=now -i=" + \
-                    fname + " -f=y" + year + \
+                    fname + " -f=" + ext + \
                     " -j=RUN_AT.in -k=initial.T63_" + hemisphere + \
                     " -n=1,62," + str(nchunks) + " -o='" + outdir + \
                     "' -r=RUN_AT_ -s=RUNDATIN.MSLP"
 
-        line_2 = "bin/track.linux -i " + year_file + " -f y" + year + \
+        line_2 = "bin/track.linux -i " + year_file + " -f " + ext + \
                     " < spec.test"
-        line_4 = "rm outdat/specfil.y" + year + "_band000"
+        line_4 = "rm outdat/specfil." + ext + "_band000 outdat/interp_th." + ext
 
         # setting environment variables
         os.environ["CC"] = "gcc"
@@ -857,7 +858,6 @@ def track_era5_mslp(input, outdirectory, NH=True, netcdf=True, ysplit=False):
         os.system(line_1)
         os.system(line_2)
         os.system(line_3)
-        os.system(line_4)
 
         print("Running TRACK...")
         os.system(line_5)
@@ -865,18 +865,25 @@ def track_era5_mslp(input, outdirectory, NH=True, netcdf=True, ysplit=False):
         print("Converting steps to dates")
         steps_to_dates(outdir + "/" + c_input, "indat/"+year_file )
 
+        # move .nc output to outdir
+        os.system("mv outdat/ff_trs." + ext + ".nc " + outdir + "/" + c_input + "/.")
+        os.system("mv outdat/tr_trs." + ext + ".nc " + outdir + "/" + c_input + "/.")
+        
         # cleanup
+        os.system(line_4)    
         os.system("rm indat/"+year_file)
         os.system("rm indat/"+fname)
+        
+        # if netcdf == True:
+        #     print("Turning track output to netCDF...")
+        #     # tr2nc - turn tracks into netCDF files
+        #     os.system("gunzip '" + outdir + "/" + c_input + "/ff_trs_neg.gz'")
+        #     os.system("gunzip '" + outdir + "/" + c_input + "/tr_trs_neg.gz'")
+        #     tr2nc_mslp(outdir + "/" + c_input + "/ff_trs_neg")
+        #     tr2nc_mslp(outdir + "/" + c_input + "/tr_trs_neg")
+        #     print("mv outdat/ff_trs." + ext + ".nc " + outdir + "/" + c_input + "/.")
 
-        if netcdf == True:
-            print("Turning track output to netCDF...")
-            # tr2nc - turn tracks into netCDF files
-            os.system("gunzip '" + outdir + "/" + c_input + "/ff_trs_neg.gz'")
-            os.system("gunzip '" + outdir + "/" + c_input + "/tr_trs_neg.gz'")
-            tr2nc_mslp(outdir + "/" + c_input + "/ff_trs_neg")
-            tr2nc_mslp(outdir + "/" + c_input + "/tr_trs_neg")
-
+            
     os.chdir(cwd)
 
     return
@@ -985,6 +992,9 @@ def track_era5_vor850(input, outdirectory, infile2, NH=True, netcdf=True, ysplit
         # calculate vorticity from UV
         vor850_temp_name = "vor850_" + c_input + ".dat"
         calc_vorticity("indat/"+year_file, vor850_temp_name, copy_file=False, cmip6=False)
+
+        # extensions
+        ext=c_input
         
         # spectral filtering (vorticity)
         # GZ+:  Enforce vorticity tracking at T42 resolution
