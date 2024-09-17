@@ -101,7 +101,7 @@ def setup_tr2nc():
     os.chdir(cwd)
     return
 
-def steps_to_dates(track_output_dir, filename, track_mins=False):
+def steps_to_dates(track_output_dir, filename, ERA5=False, track_mins=False):
     
     # read the the first date and time in the .nc file
     sdate = subprocess.check_output(f"cdo showdate {filename} | head -n 1 | awk '{{print $1}}'", shell=True)
@@ -120,7 +120,10 @@ def steps_to_dates(track_output_dir, filename, track_mins=False):
     print(f"Time string of initial step is: {timestring}")
 
     # determine increment in hours
-    timedelta=int(stime2[0:2])-int(stime1[0:2])
+    if ERA5:
+        timedelta=int(stime2[0:2])-int(stime1[0:2])
+    else:
+        timedelta=6
     print(f"Time incrment is {timedelta}h")
 
     # make subidrectories with dates
@@ -236,7 +239,9 @@ def merge_uv_ERA5(file1, file2, outfile):
                             u or v file.")
 
     # Create temporary directory one folder back
-    temp_dir = os.path.join(os.path.dirname(os.path.dirname(file1)), 'temp_uv')
+    temp_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(file1))), "temp_uv")
+    print("Temporary directory for merged U and V files: ", temp_dir)
+
     if not os.path.exists(temp_dir):
         os.makedirs(temp_dir)
 
@@ -553,13 +558,13 @@ def track_mslp(input, outdirectory, NH=True, netcdf=True, ysplit=False):
         os.system(line_5)
 
 
-        print("Turning track output to netCDF...")
-        if netcdf == True:
+        #print("Turning track output to netCDF...")
+        #if netcdf == True:
             # tr2nc - turn tracks into netCDF files
-            os.system("gunzip '" + outdir + "/" + c_input + "/ff_trs_neg.gz'")
-            os.system("gunzip '" + outdir + "/" + c_input + "/tr_trs_neg.gz'")
-            tr2nc_mslp(outdir + "/" + c_input + "/ff_trs_neg")
-            tr2nc_mslp(outdir + "/" + c_input + "/tr_trs_neg")
+            #os.system("gunzip '" + outdir + "/" + c_input + "/ff_trs_neg.gz'")
+            #os.system("gunzip '" + outdir + "/" + c_input + "/tr_trs_neg.gz'")
+            #tr2nc_mslp(outdir + "/" + c_input + "/ff_trs_neg")
+            #tr2nc_mslp(outdir + "/" + c_input + "/tr_trs_neg")
 
         # cleanup
         os.system("rm indat/" + year_file)        
@@ -600,6 +605,7 @@ def track_uv_vor850(infile, outdirectory, infile2='none', NH=True, netcdf=True, 
         If true, converts TRACK output to netCDF format using TR2NC utility.
 
     """
+    
     outdir = os.path.abspath(os.path.expanduser(outdirectory))
     if infile2 == 'none':
         input = infile
@@ -704,6 +710,9 @@ def track_uv_vor850(infile, outdirectory, infile2='none', NH=True, netcdf=True, 
         year_file = vor850name
         c_input = year + "_" + hemisphere + "_" + "_vor850_" + \
                     input_basename[:-3]
+                    
+        # extensions
+        ext=c_input
 
         # spectral filtering (vorticity)
 
@@ -756,24 +765,31 @@ def track_uv_vor850(infile, outdirectory, infile2='none', NH=True, netcdf=True, 
         print("Running TRACK...")
 
         os.system(line_5)
+        
+        # move .nc output to outdir # AGGIUNTO
+        os.system("mv outdat/ff_trs." + ext + ".nc " + outdir + "/" + c_input + "/.")
+        os.system("mv outdat/tr_trs." + ext + ".nc " + outdir + "/" + c_input + "/.")
+        
+        print("Converting steps to dates")
+        steps_to_dates(outdir + "/" + c_input, "indat/"+year_file, ERA5=False, track_mins=False)
 
         # cleanup
         os.system("cp '" + filled + "' " + str(Path.home()) + "/track-master/" +
              tempname)
         os.system("rm '" + filled + "'")
         os.system("rm indat/"+year_file)
+        os.system("rm " + tempname)
 
-        if netcdf == True:
-            print("Turning track output to netCDF...")
+        #if netcdf == True:
+            #print("Turning track output to netCDF...")
             # tr2nc - turn tracks into netCDF files
-            os.system("gunzip '" + outdir + "'/" + c_input + "/ff_trs_*")
-            os.system("gunzip '" + outdir + "'/" + c_input + "/tr_trs_*")
-            tr2nc_vor(outdir + "/" + c_input + "/ff_trs_pos")
-            tr2nc_vor(outdir + "/" + c_input + "/ff_trs_neg")
-            tr2nc_vor(outdir + "/" + c_input + "/tr_trs_pos")
-            tr2nc_vor(outdir + "/" + c_input + "/tr_trs_neg")
+            #os.system("gunzip '" + outdir + "'/" + c_input + "/ff_trs_*")
+            #os.system("gunzip '" + outdir + "'/" + c_input + "/tr_trs_*")
+            #tr2nc_vor(outdir + "/" + c_input + "/ff_trs_pos")
+            #tr2nc_vor(outdir + "/" + c_input + "/ff_trs_neg")
+            #tr2nc_vor(outdir + "/" + c_input + "/tr_trs_pos")
+            #tr2nc_vor(outdir + "/" + c_input + "/tr_trs_neg")
 
-    os.system("rm " + tempname)
     os.chdir(cwd)
     return
 
@@ -1084,12 +1100,17 @@ def track_era5_vor850(input, outdirectory, infile2, NH=True, netcdf=True, ysplit
         #     tr2nc_vor(outdir + "/" + c_input + "/tr_trs_pos")
         #     tr2nc_vor(outdir + "/" + c_input + "/tr_trs_neg")
 
-        # cleanup
+        # cleanup TRACK
         os.system("rm indat/"+year_file)
         os.system("rm indat/"+fname)
         os.system("rm indat/"+vor850_temp_name)
         os.system(line_4)
         os.system("rm outdat/initial.vor850_" + c_input)
+        
+        # if input was merged, remove the merged and filled files
+        if infile2 is not 'none':
+            os.system("rm " + outfile_uv)
+        os.system("rm " + filled)
 
 
     os.chdir(cwd)
