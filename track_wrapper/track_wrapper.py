@@ -10,7 +10,7 @@ import random
 cdo = Cdo()
 
 __all__ = ['cmip6_indat', 'regrid_cmip6', 'setup_files', 'calc_vorticity',
-           'track_mslp', 'track_mslp_new', 'track_uv_vor850', 'setup_tr2nc', 'track_era5_mslp',
+           'track_mslp', 'track_uv_vor850', 'setup_tr2nc', 'track_era5_mslp',
            'track_era5_vor850', 'tr2nc_mslp', 'tr2nc_vor','track_stats','steps_to_dates']
 
 class cmip6_indat(object):
