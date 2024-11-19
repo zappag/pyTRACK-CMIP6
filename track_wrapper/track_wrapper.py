@@ -1413,13 +1413,14 @@ def track_stats(dirname,tracksname,ext):
     subprocess.run(["rm", outdat + "ff_trs." + ext + '.nc'])
     
 
-def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0,NH=True, ysplit=False, cmip6=True):
-    # infile: precipitation or other field to be associated to the tracks
-    # outdirectory (now trackfile): directory containing the tracks
-    # fieldname: name of the field in the input file
+def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, cmip6=True):
+    # infile: precipitation or other field (.nc) to be associated to the tracks
+    # trackfile: full path to track file to be used
+    # fieldname: name of the field to be added in the input file
     # radius: radius of the field to be averaged around the track
+    # scaling: scaling factor for the field to be added
+    # hourshift: shift in hours of the track files in dates (new tr_file in dates/ will have the dates of infile.nc, check for consistency with previous dates/track file)
     # NH: True if Northern Hemisphere, False if Southern Hemisphere
-    # ysplit: True if data convers multiple years, and want to split across years
     # cmip6: True if input file is from CMIP6, False if from ERA5
  
     # convert to full path the output track directory
