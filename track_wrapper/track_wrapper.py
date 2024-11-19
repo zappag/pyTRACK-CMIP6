@@ -184,7 +184,7 @@ def setup_tr2nc():
     os.chdir(cwd)
     return
 
-def steps_to_dates(track_output_dir, filename, ERA5=False, track_mins=False):
+def steps_to_dates(tr_fname, filename, hourshift=0, ERA5=False, track_mins=False):
     
     # read the the first date and time in the .nc file
     sdate = subprocess.check_output(f"cdo showdate {filename} | head -n 1 | awk '{{print $1}}'", shell=True)
@@ -200,6 +200,10 @@ def steps_to_dates(track_output_dir, filename, ERA5=False, track_mins=False):
 
     # convert initial date to string for util/count, in format YYYYMMDDHH
     timestring=sdate[0:4]+sdate[5:7]+sdate[8:10]+stime1[0:2]
+
+    # shift timestring by amount indicated in hourshift
+    timestring = str(int(timestring) + hourshift).zfill(10)
+
     print(f"Time string of initial step is: {timestring}")
 
     # determine increment in hours
@@ -210,40 +214,55 @@ def steps_to_dates(track_output_dir, filename, ERA5=False, track_mins=False):
     print(f"Time incrment is {timedelta}h")
 
     # make subidrectories with dates
+    track_output_dir=os.path.dirname(tr_fname)
+    track_output_name=os.path.basename(tr_fname)
     os.system(f"mkdir -p {track_output_dir}/dates")
 
-    if track_mins:
-        print("converting mins (neg files) to dates")
-        # count command: [filname] [Lat.] [Lng.] [Rad.] [Genesis (0)/Lysis (1)/Passing(2)/Passing Time(3)/All Times(4)] [Negate (1)] [Start Time, YYYYMMDDHH] [tstep]
-        tr_fname=f"{track_output_dir}/tr_trs_neg"
+    # count command: [filname] [Lat.] [Lng.] [Rad.] [Genesis (0)/Lysis (1)/Passing(2)/Passing Time(3)/All Times(4)] [Negate (1)] [Start Time, YYYYMMDDHH] [tstep]
+    if not os.path.exists(f"{tr_fname}") and os.path.exists(f"{tr_fname}.gz"):
         os.system("gzip -d " + tr_fname + ".gz")
-        count=str(Path.home()) + "/track-master/utils/bin/count " + tr_fname + " 0 0 5 4 0 "  + timestring + " " + str(timedelta)
-        os.system(f"{count} ")
+    elif not os.path.exists(f"{tr_fname}") and not os.path.exists(f"{tr_fname}.gz"):
+        raise Exception("missing track file for date conversione")
 
-        ff_fname=f"{track_output_dir}/ff_trs_neg"
-        os.system("gzip -d " + ff_fname + ".gz")
-        count=str(Path.home()) + "/track-master/utils/bin/count " + ff_fname + " 0 0 5 4 0 "  + timestring + " " + str(timedelta)
-        os.system(f"{count} ")
+    count=str(Path.home()) + "/track-master/utils/bin/count " + tr_fname + " 0 0 5 4 0 "  + timestring + " " + str(timedelta)
+    os.system(f"{count} ")
 
-        # move files to dates subdirectories
-        os.system(f"mv {tr_fname}.new {track_output_dir}/dates/tr_trs_neg")
-        os.system(f"mv {ff_fname}.new {track_output_dir}/dates/ff_trs_neg")
-    else:
-        print("converting max (pos files) to dates")
-        # count command: [filname] [Lat.] [Lng.] [Rad.] [Genesis (0)/Lysis (1)/Passing(2)/Passing Time(3)/All Times(4)] [Negate (1)] [Start Time, YYYYMMDDHH] [tstep]
-        tr_fname=f"{track_output_dir}/tr_trs_pos"
-        os.system("gzip -d " + tr_fname + ".gz")
-        count=str(Path.home()) + "/track-master/utils/bin/count " + tr_fname + " 0 0 5 4 0 "  + timestring + " " + str(timedelta)
-        os.system(f"{count} ")
+    # move files to dates subdirectories
+    os.system(f"mv {tr_fname}.new {track_output_dir}/dates/{track_output_name}")
 
-        ff_fname=f"{track_output_dir}/ff_trs_pos"
-        os.system("gzip -d " + ff_fname + ".gz")
-        count=str(Path.home()) + "/track-master/utils/bin/count " + ff_fname + " 0 0 5 4 0 "  + timestring + " " + str(timedelta)
-        os.system(f"{count} ")
 
-        # move files to dates subdirectories
-        os.system(f"mv {tr_fname}.new {track_output_dir}/dates/tr_trs_pos")
-        os.system(f"mv {ff_fname}.new {track_output_dir}/dates/ff_trs_pos")
+    # if track_mins:
+    #     print("converting mins (neg files) to dates")
+    #     # count command: [filname] [Lat.] [Lng.] [Rad.] [Genesis (0)/Lysis (1)/Passing(2)/Passing Time(3)/All Times(4)] [Negate (1)] [Start Time, YYYYMMDDHH] [tstep]
+    #     tr_fname=f"{track_output_dir}/tr_trs_neg"
+    #     os.system("gzip -d " + tr_fname + ".gz")
+    #     count=str(Path.home()) + "/track-master/utils/bin/count " + tr_fname + " 0 0 5 4 0 "  + timestring + " " + str(timedelta)
+    #     os.system(f"{count} ")
+
+    #     ff_fname=f"{track_output_dir}/ff_trs_neg"
+    #     os.system("gzip -d " + ff_fname + ".gz")
+    #     count=str(Path.home()) + "/track-master/utils/bin/count " + ff_fname + " 0 0 5 4 0 "  + timestring + " " + str(timedelta)
+    #     os.system(f"{count} ")
+
+    #     # move files to dates subdirectories
+    #     os.system(f"mv {tr_fname}.new {track_output_dir}/dates/tr_trs_neg")
+    #     os.system(f"mv {ff_fname}.new {track_output_dir}/dates/ff_trs_neg")
+    # else:
+    #     print("converting max (pos files) to dates")
+    #     # count command: [filname] [Lat.] [Lng.] [Rad.] [Genesis (0)/Lysis (1)/Passing(2)/Passing Time(3)/All Times(4)] [Negate (1)] [Start Time, YYYYMMDDHH] [tstep]
+    #     tr_fname=f"{track_output_dir}/tr_trs_pos"
+    #     os.system("gzip -d " + tr_fname + ".gz")
+    #     count=str(Path.home()) + "/track-master/utils/bin/count " + tr_fname + " 0 0 5 4 0 "  + timestring + " " + str(timedelta)
+    #     os.system(f"{count} ")
+
+    #     ff_fname=f"{track_output_dir}/ff_trs_pos"
+    #     os.system("gzip -d " + ff_fname + ".gz")
+    #     count=str(Path.home()) + "/track-master/utils/bin/count " + ff_fname + " 0 0 5 4 0 "  + timestring + " " + str(timedelta)
+    #     os.system(f"{count} ")
+
+    #     # move files to dates subdirectories
+    #     os.system(f"mv {tr_fname}.new {track_output_dir}/dates/tr_trs_pos")
+    #     os.system(f"mv {ff_fname}.new {track_output_dir}/dates/ff_trs_pos")
 
     return
 #
@@ -568,6 +587,10 @@ def track_mslp(input, outdirectory, NH=True, ysplit=False, cmip6=True):
     print("Remove unnecessary variables.")
     input_e = input[:-3] + "_extr.nc"
 
+    # remove input_e if exists
+    if os.path.isfile(input_e):
+        os.system("rm " + input_e)
+
     if "time_bnds" in data.vars:
         ncks = "time_bnds"
         if "lat_bnds" in data.vars:
@@ -598,12 +621,11 @@ def track_mslp(input, outdirectory, NH=True, ysplit=False, cmip6=True):
         print("Filled/missing attributes removed") 
 
     # clean up 
-    if input_e != input:
+    if os.path.isfile(input_e):
         os.system("rm " + input_e)
 
-    if input_eg != input_e:
+    if os.path.isfile(input_eg):
         os.system("rm " + input_eg)
-
 
     # Link data to TRACK directory
     print('Linking data to TRACK/indat')
@@ -680,7 +702,6 @@ def track_mslp(input, outdirectory, NH=True, ysplit=False, cmip6=True):
         os.system(line_1)
         os.system(line_2)
         print(year_file)
-        print(ext)
         os.system(line_3)
 
         print("Running TRACK...")
@@ -689,7 +710,9 @@ def track_mslp(input, outdirectory, NH=True, ysplit=False, cmip6=True):
         print("Converting steps to dates")
         
         # set track mins to True to convert only the minimum of mslp
-        steps_to_dates(outdir + "/" + c_input, "indat/"+year_file, track_mins=True)
+        print(outdir + "/" + c_input + "/ff_trs_neg")
+        steps_to_dates(outdir + "/" + c_input + "/ff_trs_neg", "indat/"+year_file)
+        steps_to_dates(outdir + "/" + c_input + "/tr_trs_neg", "indat/"+year_file)
 
         # move .nc output to outdir
         os.system("mv outdat/ff_trs." + ext + ".nc " + outdir + "/" + c_input + "/ff_trs_neg.nc")
@@ -890,7 +913,8 @@ def track_uv_vor850(infile, outdirectory, infile2='none', NH=True, ysplit=False,
         os.system(line_5)
 
         print("Converting steps to dates")
-        steps_to_dates(outdir + "/" + c_input, "indat/"+year_file)
+        steps_to_dates(outdir + "/" + c_input + "/ff_trs_pos", "indat/"+year_file)
+        steps_to_dates(outdir + "/" + c_input + "/tr_trs_pos", "indat/"+year_file)
 
         # move .nc output to outdir
         os.system("mv outdat/ff_trs." + ext + ".nc " + outdir + "/" + c_input + "/ff_trs_pos.nc")
@@ -1389,9 +1413,9 @@ def track_stats(dirname,tracksname,ext):
     subprocess.run(["rm", outdat + "ff_trs." + ext + '.nc'])
     
 
-def add_mean_field(infile, outdirectory, fieldname, radius, NH=True, ysplit=False, cmip6=True):
+def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0,NH=True, ysplit=False, cmip6=True):
     # infile: precipitation or other field to be associated to the tracks
-    # outdirectory: directory containing the tracks
+    # outdirectory (now trackfile): directory containing the tracks
     # fieldname: name of the field in the input file
     # radius: radius of the field to be averaged around the track
     # NH: True if Northern Hemisphere, False if Southern Hemisphere
@@ -1399,7 +1423,7 @@ def add_mean_field(infile, outdirectory, fieldname, radius, NH=True, ysplit=Fals
     # cmip6: True if input file is from CMIP6, False if from ERA5
  
     # convert to full path the output track directory
-    outdir = os.path.abspath(os.path.expanduser(outdirectory))
+    #outdir = os.path.abspath(os.path.expanduser(outdirectory))
     
     # check infile exists
     if not os.path.exists(infile):
@@ -1428,20 +1452,15 @@ def add_mean_field(infile, outdirectory, fieldname, radius, NH=True, ysplit=Fals
         elif "lat_bnds" in data.vars:
             os.system("ncks -C -O -x -v lat_bnds,lon_bnds " + infile + " " + infile_e)
         else:
-            infile_e = infile
-
-    # link data indat
-    print('Linking data to TRACK/indat')
-    os.system("ln -fs '" + infile_e + "' " + str(Path.home()) + "/track-master/indat/.")    
+            infile_e = infile 
 
     # setup input file
-    inputfile_template="/home/zappa/track-master/indat/addprec_template.in"
+    inputfile_template="/home/zappa/pyTRACK-CMIP6/track_wrapper/indat/template_addmean.in"
     
     # revise NY
-    
     nx, ny = data.get_nx_ny()
     if data.has_nh_pole():
-        # remove one from ny (string)
+        # remove one latitude grid point from ny (string)
         ny = str(int(ny)-1)
         sed_nh_string="-e 's:NH:n:' "
     else:
@@ -1459,14 +1478,9 @@ def add_mean_field(infile, outdirectory, fieldname, radius, NH=True, ysplit=Fals
     else:
         sed_eq_string="-e ':equator:d:' "
     
-    radiusp=str(int(radius)+1)
-
-    trackfile="/work/users/ghinassi/track_output/ERA5/JJA/msl/NH_ERA5_msl_6hr_1950_JJA/ff_trs_neg"
-    scaling=3600
-    #line_1 = f"sed -e \s:NX:{nx}:;s:NY:{ny}:;s:ncfiletobeadded:{infile_e}:;s:trackfilefullpath:{trackfile}\ {inputfile_template}  > addprec.in"
-
-
-    line_1 = (
+    # prepare adapt input file
+    radiusp=str(int(radius)+1)+".0"
+    line1 = (
         f"sed -e 's:NX:{nx}:' "
         f"-e 's:NY:{ny}:' "
         f"-e 's:scaling:{scaling}:' "
@@ -1478,8 +1492,45 @@ def add_mean_field(infile, outdirectory, fieldname, radius, NH=True, ysplit=Fals
         f"-e 's:ncfiletobeadded:{infile_e}:' "
         f"{inputfile_template} > addprec.in"
     )
-    print(line_1)
-    os.system(line_1)
+    print(line1)
+
+    ext=str(random.randint(0, 100000))
+    line2=f"bin/track.linux -f {ext} < addprec.in"
+
+    # run adapt input file
+    cwd = os.getcwd()
+    os.chdir(str(Path.home()) + "/track-master")
+
+    os.system(line1)
+    os.system(line2)
+
+    # filenames
+    # input track filename
+    trackfilename=os.path.basename(trackfile)
+    # output track filename and directory
+    trackfileoutdir=os.path.dirname(trackfileout)
+    trackfileoutname=os.path.basename(trackfileout)
+
+    # manage output
+    trackfileout=f"{trackfile}.{fieldname}{str(radius)[0]}mean"
+    os.system(f"mv outdat/ff_trs.{ext}_addfld {trackfileout}")
+
+    # steps to dates
+    steps_to_dates(trackfileout, infile, hourshift=hourshift)
+
+    # check dates consistency
+    command = f"sed -n '6p' {trackfileoutdir}/dates/{trackfilename} | awk '{{print $1}}'"
+    old_date=subprocess.check_output(command, shell=True, text=True).strip()
+    command = f"sed -n '6p' {trackfileoutdir}/dates/{trackfileoutname} | awk '{{print $1}}'"
+    new_date=subprocess.check_output(command, shell=True, text=True).strip()
+    if old_date != new_date:
+        print("WARNING: Dates in the track file and in the added field file do not match. Please check. Consider using the hourshift option.")
+
+    # cleanup
+    os.system(f"rm outdat/initial.{ext}")
+    os.system(f"rm outdat/ff_trs.{ext}")
+    os.system(f"rm outdat/ff_trs.{ext}.nc")
+
 
     return
     
