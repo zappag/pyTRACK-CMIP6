@@ -11,7 +11,7 @@ cdo = Cdo()
 
 __all__ = ['cmip6_indat', 'regrid_cmip6', 'setup_files', 'calc_vorticity',
            'track_mslp', 'track_uv_vor850', 'setup_tr2nc',
-           'tr2nc_mslp', 'tr2nc_vor','track_stats','steps_to_dates',
+           'tr2nc_mslp', 'tr2nc_vor','stats','steps_to_dates',
            'add_mean_field']
 
 class cmip6_indat(object):
@@ -1329,37 +1329,64 @@ result = find_directories_with_file(root_directory, file_to_find)
 
 
 ## GZ+
-def track_stats(dirname,tracksname,ext):
+def stats(dirname,tracksname,statstype="std",sy=None,ly=None,ext=None):
     """
     dirname : string
         Path to directory containing years to be analysed
     tracksname : string
         Name of files to be used for tracking, e.g. tr_trs_pos
+    statstype : string referring to the type of stats to be calculated (see below)
+    sy : int
+        Starting year
+    ly : int
+        Last year    
     """
-
     
     trackmaster=(str(Path.home()) + "/track-master/")
     utils=(str(Path.home()) + "/track-master/utils/")
     indat=(str(Path.home()) + "/track-master/indat/")
     outdat=(str(Path.home()) + "/track-master/outdat/")
-    total=dirname + "/total/"
+    stats=dirname + "/stats/"
 
-    if not os.path.exists(total):
-        Path(total).mkdir(parents=True, exist_ok=True)
+    if not os.path.exists(stats):
+        Path(stats).mkdir(parents=True, exist_ok=True)
 
-    # set stat file type depending on options (to be done)
-    stat_file="STATS_LWA.in"
-    
+    # set stat file type depending on options (test)
+    if statstype == "std":
+        stat_file="/home/zappa/pyTRACK-CMIP6/track_wrapper/indat/STATS_standard_template.in"
+        stat_file_name=os.path.basename(stat_file)
+
     # list available track files
+    years_set = set()  # This will store unique years
     file_list = []
-    for path in Path(dirname).rglob(tracksname):
+    for path in Path(dirname).glob(f"*/{tracksname}"):
+        # extract year
+        year=path.parts[-2].split('_')[-2]
+        years_set.add(year)
+        if sy is not None and int(year) < sy:
+            continue
+        if ly is not None and int(year) > ly:
+            continue        
         file_list.append(path)
     file_list.sort()
     ny=len(file_list)
     
+    if sy is  None:
+        sy=int(min(years_set))
+    if ly is None:
+        ly=int(max(years_set))
+    
+    # sanity check all years are available
+    if ly-sy+1 != ny:
+        print("Missing years in directory for stats calculation")
+        return
+
+    # define extension
+    ext=f"{statstype}_{sy}-{ly}"
+
     # create combine file
     os.chdir(dirname)
-    cfile="combine_" + ext + ".in"
+    cfile="combine_" + str(sy) + "-" + str(ly) + ".in"
     if os.path.exists(cfile):
         os.remove(cfile)
 
@@ -1370,48 +1397,60 @@ def track_stats(dirname,tracksname,ext):
     for path in file_list:
         cfile_obj.write(str(path) + "\n")
     cfile_obj.close()
-        
+
     # run combine utility
-    os.chdir(total)
+    os.chdir(stats)
     command=utils + "bin/combine < " + dirname + "/" + cfile
     os.system(command)
-    tr_combined=total+'/'+'combined_tr_trs'
+    tr_combined=stats+'/'+'combined_tr_trs'
+    tr_combined1=f"{stats}/combined_{tracksname}_{sy}-{ly}"
+    os.system(f"mv {tr_combined} {tr_combined1}")
 
-    # update stats file
-    stat_file1=stat_file+"_"+ext
-    stat_out=indat+stat_file1
+
+    # update stats file replacing string
+    stat_file1=stat_file_name.replace("template",f"{tracksname}_{sy}-{ly}")
+    stat_out=f"{indat}/{stat_file1}"
     with open(stat_out,'w') as outfile:
-        subprocess.run(["sed","s:tr_trs:"+str(tr_combined)+":", indat + stat_file],stdout=outfile)
+        subprocess.run(["sed","s:tr_trs:"+str(tr_combined1)+":", stat_file],stdout=outfile)
+
+    # copy gridT63 file
+    os.system(f"cp /home/zappa/pyTRACK-CMIP6/track_wrapper/indat/gridT63.dat {indat}")
 
     # # update all_pr_in
-    # allpr_out=total+"all_pr_in"
+    # allpr_out=stats+"all_pr_in"
     # with open(allpr_out,'w') as outfile:
     #     subprocess.run(["sed","s:STAT_FILE:"+str(stat_file1)+":", indat + "all_pr_in"],stdout=outfile)
-    # os.system("chmod u+x " + total + "all_pr_in")
-    
+    # os.system("chmod u+x " + stats + "all_pr_in")
+
     # run stats
-    EXT="provaprova"
     os.chdir(trackmaster)
-    os.system("bin/track.linux " + " -f" + ext + " < " + stat_out + " > prova ")
-    #pstat="phase_trs." + ext  # phase speeds
+    os.system("bin/track.linux " + " -f " + ext + " < " + stat_out)
+
+    # standard output files
     sstat="stat_trs." + ext
     sstat_nc="stat_trs." + ext + "_1.nc"
     sstat_scl="stat_trs_scl." + ext
     sstat_scl_nc="stat_trs_scl." + ext + "_1.nc"
-    #sstatBIG="STATS_VOR850_EXT"
+    # renamed output files
+    sstat1=sstat.replace("stat_trs",f"{tracksname}")
+    sstat_nc1=sstat_nc.replace("stat_trs",f"{tracksname}")
+    sstat_scl1=sstat_scl.replace("stat_trs",f"{tracksname}")
+    sstat_scl_nc1=sstat_scl_nc.replace("stat_trs",f"{tracksname}")
 
-    #subprocess.run(["mv", outdat + pstat , total + pstat])
-    subprocess.run(["mv", outdat + sstat , total + sstat])
-    subprocess.run(["mv", outdat + sstat_nc , total + sstat_nc])
-    subprocess.run(["mv", outdat + sstat_scl , total + sstat_scl])
-    subprocess.run(["mv", outdat + sstat_scl_nc , total + sstat_scl_nc])
-    #subprocess.run(["mv", outdat + sstatBIG , total + sstatBIG])
+    subprocess.run(["mv", outdat + sstat_nc , stats + sstat_nc1])
+    subprocess.run(["mv", outdat + sstat_scl_nc , stats + sstat_scl_nc1])
+    subprocess.run(["mv", dirname + "/" + cfile, stats + "/" + cfile])
+    subprocess.run(["mv", stat_out, stats + "/" + stat_file1]) 
+
+
+    subprocess.run(["rm", outdat + sstat])
+    subprocess.run(["rm", outdat + sstat_scl])
     subprocess.run(["rm", outdat + "initial." + ext])
     subprocess.run(["rm", outdat + "init_trs." + ext])
     subprocess.run(["rm", outdat + "disp_trs." + ext])
     subprocess.run(["rm", outdat + "ff_trs." + ext])
     subprocess.run(["rm", outdat + "ff_trs." + ext + '.nc'])
-    
+
 
 def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, cmip6=True):
     # infile: precipitation or other field (.nc) to be associated to the tracks
@@ -1531,7 +1570,6 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
     os.system(f"rm outdat/initial.{ext}")
     os.system(f"rm outdat/ff_trs.{ext}")
     os.system(f"rm outdat/ff_trs.{ext}.nc")
-
 
     return
     
