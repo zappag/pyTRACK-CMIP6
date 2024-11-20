@@ -1342,6 +1342,8 @@ def stats(dirname,tracksname,statstype="std",sy=None,ly=None,ext=None):
         Last year    
     """
     
+    # NOTE CHANGE NOMENCLATURE OF OUTPUT FILE TO INTENSITY (FOLLOWED BY NAME ADD FIELD)
+
     trackmaster=(str(Path.home()) + "/track-master/")
     utils=(str(Path.home()) + "/track-master/utils/")
     indat=(str(Path.home()) + "/track-master/indat/")
@@ -1354,7 +1356,10 @@ def stats(dirname,tracksname,statstype="std",sy=None,ly=None,ext=None):
     # set stat file type depending on options (test)
     if statstype == "std":
         stat_file="/home/zappa/pyTRACK-CMIP6/track_wrapper/indat/STATS_standard_template.in"
-        stat_file_name=os.path.basename(stat_file)
+    elif statstype[0:3] == "add":
+        stat_file="/home/zappa/pyTRACK-CMIP6/track_wrapper/indat/STATS_addfld_template.in"
+        fldnum=statstype[3]
+    stat_file_name=os.path.basename(stat_file)
 
     # list available track files
     years_set = set()  # This will store unique years
@@ -1406,13 +1411,16 @@ def stats(dirname,tracksname,statstype="std",sy=None,ly=None,ext=None):
     tr_combined1=f"{stats}/combined_{tracksname}_{sy}-{ly}"
     os.system(f"mv {tr_combined} {tr_combined1}")
 
-
     # update stats file replacing string
     stat_file1=stat_file_name.replace("template",f"{tracksname}_{sy}-{ly}")
     stat_out=f"{indat}/{stat_file1}"
     with open(stat_out,'w') as outfile:
-        subprocess.run(["sed","s:tr_trs:"+str(tr_combined1)+":", stat_file],stdout=outfile)
+        if statstype == "std":
+            subprocess.run(["sed","s:tr_trs:"+tr_combined1+":", stat_file],stdout=outfile)
+        if statstype == "add"+fldnum:
+            subprocess.run(["sed","-e","s:tr_trs:"+tr_combined1+":","-e","s:fldnum:"+str(fldnum)+":", stat_file],stdout=outfile)
 
+    
     # copy gridT63 file
     os.system(f"cp /home/zappa/pyTRACK-CMIP6/track_wrapper/indat/gridT63.dat {indat}")
 
