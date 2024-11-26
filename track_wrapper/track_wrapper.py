@@ -1332,14 +1332,16 @@ result = find_directories_with_file(root_directory, file_to_find)
 def stats(dirname,tracksname,statstype="std",sy=None,ly=None,ext=None):
     """
     dirname : string
-        Path to directory containing years to be analysed
+        Path to directory of tracking analysis (not individual years)
     tracksname : string
-        Name of files to be used for tracking, e.g. tr_trs_pos
-    statstype : string referring to the type of stats to be calculated (see below)
+        Name of files to be used for tracking, e.g. tr_trs_pos/tr_trs_neg/ff_trs_pos_TP5mean/..
+    statstype : string referring to the type of stats to be calculated. 
+                - std:  track density/genesys/lysys....
+                - addX: produce mean intensity of added field #X.
     sy : int
-        Starting year
+        Starting year (optional, take all years until ly if not specified)
     ly : int
-        Last year    
+        Last year (optional, take all years from sy if not specified)
     """
     
     # NOTE CHANGE NOMENCLATURE OF OUTPUT FILE TO INTENSITY (FOLLOWED BY NAME ADD FIELD)
@@ -1463,16 +1465,12 @@ def stats(dirname,tracksname,statstype="std",sy=None,ly=None,ext=None):
 def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, cmip6=True):
     # infile: precipitation or other field (.nc) to be associated to the tracks
     # trackfile: full path to track file to be used
-    # fieldname: name of the field to be added in the input file
-    # radius: radius of the field to be averaged around the track
+    # fieldname: name of the field to be added in the input file (as in the .nc file)
+    # radius: radius of the area in which the field is avaraged
     # scaling: scaling factor for the field to be added
-    # hourshift: shift in hours of the track files in dates (new tr_file in dates/ will have the dates of infile.nc, check for consistency with previous dates/track file)
-    # NH: True if Northern Hemisphere, False if Southern Hemisphere
+    # hourshift: controls the time of the tracks dates/. They will normally take the time as in infile.nc, but you may want to check for consistency with previous track file, and shift accordingly. 
     # cmip6: True if input file is from CMIP6, False if from ERA5
- 
-    # convert to full path the output track directory
-    #outdir = os.path.abspath(os.path.expanduser(outdirectory))
-    
+     
     # check infile exists
     if not os.path.exists(infile):
         raise Exception("Input file does not exist.")
