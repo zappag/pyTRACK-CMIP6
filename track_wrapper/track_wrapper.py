@@ -1553,13 +1553,14 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
     # filenames
     # input track filename
     trackfilename=os.path.basename(trackfile)
-    # output track filename and directory
-    trackfileoutdir=os.path.dirname(trackfileout)
-    trackfileoutname=os.path.basename(trackfileout)
 
     # manage output
     trackfileout=f"{trackfile}.{fieldname}{str(radius)[0]}mean"
     os.system(f"mv outdat/ff_trs.{ext}_addfld {trackfileout}")
+
+     # output track filename and directory
+    trackfileoutdir=os.path.dirname(trackfileout)
+    trackfileoutname=os.path.basename(trackfileout)
 
     # steps to dates
     steps_to_dates(trackfileout, infile, hourshift=hourshift)
