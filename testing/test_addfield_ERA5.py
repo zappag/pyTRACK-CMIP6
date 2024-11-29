@@ -11,9 +11,9 @@ trackVarDir="/work_big/users/zappa/era5_test_track/"
 trackVar="vor850"
 
 run_track=False
-run_add=False
+run_add=True
 run_stats=False
-run_stats_add=True
+run_stats_add=False
 
 # ### testing of vorticity era5 tracking
 # file_u="ERA5_u_6hr_1950_10t.nc"
@@ -29,7 +29,7 @@ file_psl="ERA5_msl_6hr_1950_360t.nc"
 ff=f"{trackVarDir}/{file_psl}"
 
 if run_track:
-    #track_wrapper.track_mslp_new(ff, refoutDir, 'ERA5_latest' ,NH=True, cmip6=False)
+    track_wrapper.track_mslp_new(ff, refoutDir, 'ERA5_latest' ,NH=True, cmip6=False)
 
 if run_add:
     pr_file="/home/zappa/work_big/era5_test_track/ERA5_pr_6h_jja_1950.nc"

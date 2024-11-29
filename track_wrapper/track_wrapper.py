@@ -1357,9 +1357,9 @@ def stats(dirname,tracksname,statstype="std",sy=None,ly=None,ext=None):
 
     # set stat file type depending on options (test)
     if statstype == "std":
-        stat_file="/home/zappa/pyTRACK-CMIP6/track_wrapper/indat/STATS_standard_template.in"
+        stat_file=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/STATS_standard_template.in"
     elif statstype[0:3] == "add":
-        stat_file="/home/zappa/pyTRACK-CMIP6/track_wrapper/indat/STATS_addfld_template.in"
+        stat_file=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/STATS_addfld_template.in"
         fldnum=statstype[3]
     stat_file_name=os.path.basename(stat_file)
 
@@ -1424,7 +1424,7 @@ def stats(dirname,tracksname,statstype="std",sy=None,ly=None,ext=None):
 
     
     # copy gridT63 file
-    os.system(f"cp /home/zappa/pyTRACK-CMIP6/track_wrapper/indat/gridT63.dat {indat}")
+    os.system(f"cp {Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/gridT63.dat {indat}")
 
     # # update all_pr_in
     # allpr_out=stats+"all_pr_in"
@@ -1501,7 +1501,7 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
             infile_e = infile 
 
     # setup input file
-    inputfile_template="/home/zappa/pyTRACK-CMIP6/track_wrapper/indat/template_addmean.in"
+    inputfile_template=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/template_addmean.in"
     
     # revise NY
     nx, ny = data.get_nx_ny()
