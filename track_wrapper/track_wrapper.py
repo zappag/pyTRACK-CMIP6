@@ -152,6 +152,8 @@ def setup_files():
                 "/track-master/") # calcvor and specfilt files
     os.system("cp track_wrapper/indat/RUNDATIN.* " + str(Path.home()) +
                 "/track-master/indat") # RUNDATIN files
+    os.system("cp track_wrapper/indat/calcvor_onelev.in " + str(Path.home()) +
+                "/track-master/indat/.") # RUNDATIN files
     os.system("cp track_wrapper/data/* " + str(Path.home()) +
                 "/track-master/data") # initial and adapt.dat0, zone.dat0
     os.system("cp track_wrapper/tr2nc_new.tar " + str(Path.home()) +
@@ -479,6 +481,8 @@ def calc_vorticity(uv_file, outfile, copy_file=True, cmip6=True):
         Desired base name of .dat vorticity file that will be output into the
         track-master/indat directory.
 
+    ext: extension to avoid overwriting files
+
     copy_file : boolean, optional
         Whether or not the uv_file will be copied into the TRACK directory. This
         is not needed within the tracking functions, but needed for manual use.
@@ -516,7 +520,9 @@ def calc_vorticity(uv_file, outfile, copy_file=True, cmip6=True):
     tempname = os.path.basename(uv_file)
 
     # removing .dat to create extension
-    ext=outfile[:-4]
+    ext=outfile[7:-4]
+    print(ext)
+
 
     # if copy_file == True: # copy input data to TRACK/indat directory
 
@@ -531,9 +537,9 @@ def calc_vorticity(uv_file, outfile, copy_file=True, cmip6=True):
     # generate input file and calculate vorticity using TRACK
     os.system("sed -e \"s/VAR1/"+ u_name + "/;s/VAR2/" + v_name + "/;s/NX/" +
                 nx + "/;s/NY/" + ny + "/;s/LEV/85000/;s/VOR/" + outfile +
-                "/\" calcvor_onelev.in > calcvor.test")
-    os.system("bin/track.linux -i " + tempname + " -f " + ext + " < calcvor.test")
-
+                "/\" indat/calcvor_onelev.in > indat/calcvor_onelev_" + ext + ".in")
+    os.system("bin/track.linux -i " + tempname + " -f " + ext + " < indat/calcvor_onelev_" + ext + ".in")
+    raise Exception("STOP")
     os.chdir(cwd) # change back to working directory
 
     return
@@ -925,7 +931,8 @@ def track_uv_vor850(infile, outdirectory, infile2='none', NH=True, ysplit=False,
         os.system("rm indat/"+fname)
         os.system("rm indat/"+vor850_temp_name)
         os.system(line_4)
-        os.system("rm outdat/initial.vor850_" + ext)
+        #os.system("rm outdat/initial.vor850_" + ext)
+        os.system("rm indat/calcvor_onelev_" + ext + ".in")
         
     # if input was merged, remove the merged and filled files
     if infile2 != 'none':

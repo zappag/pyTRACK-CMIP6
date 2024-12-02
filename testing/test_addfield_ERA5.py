@@ -7,28 +7,28 @@ from pathlib import Path
 #import subprocess
 
 
-trackVarDir="/work_big/users/zappa/era5_test_track/"
-trackVar="vor850"
-
-run_track=False
-run_add=True
+run_track_vor=True
+run_track_mslp=False
+run_add=False
 run_stats=False
 run_stats_add=False
 
 # ### testing of vorticity era5 tracking
-# file_u="ERA5_u_6hr_1950_10t.nc"
-# file_v="ERA5_v_6hr_1950_10t.nc"
-# refoutDir="/work_big/users/zappa/era5_test_track"
-# ff_u=f"{trackVarDir}/uv/{file_u}"
-# ff_v=f"{trackVarDir}/uv/{file_v}"
-# track_wrapper.track_uv_vor850(ff_u, refoutDir, ff_v, NH=True, netcdf=False, ysplit=False, cmip6=False)
+if run_track_vor:
+    trackVar="vor850"
+    trackVarDir="/work_big/users/zappa/era5_test_track/"
+    file_u="ERA5_u_6hr_1950_10t.nc"
+    file_v="ERA5_v_6hr_1950_10t.nc"
+    ff_u=f"{trackVarDir}/uv/{file_u}"
+    ff_v=f"{trackVarDir}/uv/{file_v}"
+    refoutDir="/work_big/users/zappa/era5_test_track"
+    track_wrapper.track_uv_vor850(ff_u, refoutDir, ff_v, NH=True, ysplit=False, cmip6=False)
 
 ### testing of mslp era5 tracking
-refoutDir="/work_big/users/zappa/era5_test_track"
-file_psl="ERA5_msl_6hr_1950_360t.nc"
-ff=f"{trackVarDir}/{file_psl}"
-
-if run_track:
+if run_track_mslp:
+    refoutDir="/work_big/users/zappa/era5_test_track"
+    file_psl="ERA5_msl_6hr_1950_360t.nc"
+    ff=f"{trackVarDir}/{file_psl}"
     track_wrapper.track_mslp_new(ff, refoutDir, 'ERA5_latest' ,NH=True, cmip6=False)
 
 if run_add:
