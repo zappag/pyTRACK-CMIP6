@@ -73,8 +73,12 @@ class data_indat(object):
     def get_nx_ny(self):
         # returns number of latitudes and longitudes in the grid
         if self.data_type == 'era5':
-            return str(len(self.data.variables['longitude'][:])), \
-                    str(len(self.data.variables['latitude'][:]))
+            try:
+                return str(len(self.data.variables['longitude'][:])), \
+                       str(len(self.data.variables['latitude'][:]))
+            except KeyError:
+                return str(len(self.data.variables['lon'][:])), \
+                       str(len(self.data.variables['lat'][:]))
         elif self.data_type == 'cmip6':
             return str(len(self.data.variables['lon'][:])), \
                     str(len(self.data.variables['lat'][:]))
@@ -94,7 +98,7 @@ class data_indat(object):
     def has_equator(self):
         # check if the data has an equator
         if self.data_type == 'era5':
-            if 0 in self.data.variables['latitude'][:]:
+            if 0 in self.data.variables.get('latitude', self.data.variables.get('lat', []))[:]:
                 return True
             else:
                 return False
@@ -107,7 +111,7 @@ class data_indat(object):
     def has_nh_pole(self):
         # check if the data has an NH
         if self.data_type == 'era5':
-            if 90 in self.data.variables['latitude'][:]:
+            if 90 in self.data.variables.get('latitude', self.data.variables.get('lat', []))[:]:
                 return True
             else:
                 return False
@@ -120,7 +124,7 @@ class data_indat(object):
     def has_sh_pole(self):
         # check if the data has an NH
         if self.data_type == 'era5':
-            if -90 in self.data.variables['latitude'][:]:
+            if 90 in self.data.variables.get('latitude', self.data.variables.get('lat', []))[:]:
                 return True
             else:
                 return False
@@ -1357,9 +1361,9 @@ def stats(dirname,tracksname,statstype="std",sy=None,ly=None,ext=None):
 
     # set stat file type depending on options (test)
     if statstype == "std":
-        stat_file="/home/zappa/pyTRACK-CMIP6/track_wrapper/indat/STATS_standard_template.in"
+        stat_file==f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/STATS_standard_template.in"
     elif statstype[0:3] == "add":
-        stat_file="/home/zappa/pyTRACK-CMIP6/track_wrapper/indat/STATS_addfld_template.in"
+        stat_file==f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/STATS_addfld_template.in"
         fldnum=statstype[3]
     stat_file_name=os.path.basename(stat_file)
 
@@ -1424,7 +1428,7 @@ def stats(dirname,tracksname,statstype="std",sy=None,ly=None,ext=None):
 
     
     # copy gridT63 file
-    os.system(f"cp /home/zappa/pyTRACK-CMIP6/track_wrapper/indat/gridT63.dat {indat}")
+    os.system(f"cp {Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/gridT63.dat {indat}")
 
     # # update all_pr_in
     # allpr_out=stats+"all_pr_in"
@@ -1501,7 +1505,7 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
             infile_e = infile 
 
     # setup input file
-    inputfile_template="/home/zappa/pyTRACK-CMIP6/track_wrapper/indat/template_addmean.in"
+    inputfile_template=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/template_addmean.in"
     
     # revise NY
     nx, ny = data.get_nx_ny()
@@ -1553,13 +1557,13 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
     # filenames
     # input track filename
     trackfilename=os.path.basename(trackfile)
-    # output track filename and directory
-    trackfileoutdir=os.path.dirname(trackfileout)
-    trackfileoutname=os.path.basename(trackfileout)
 
     # manage output
     trackfileout=f"{trackfile}.{fieldname}{str(radius)[0]}mean"
     os.system(f"mv outdat/ff_trs.{ext}_addfld {trackfileout}")
+    # output track filename and directory
+    trackfileoutdir=os.path.dirname(trackfileout)
+    trackfileoutname=os.path.basename(trackfileout)
 
     # steps to dates
     steps_to_dates(trackfileout, infile, hourshift=hourshift)

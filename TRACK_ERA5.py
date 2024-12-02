@@ -6,29 +6,54 @@ from pathlib import Path
 #import yaml
 #import subprocess
 
-
-#trackVarDir_msl="/home/ghinassi/work_big/ERA5/msl/"
-trackVarDir_u="/home/ghinassi/work_big/ERA5/u/"
-trackVarDir_v="/home/ghinassi/work_big/ERA5/v/"
+#select the input variable for TRACK, available are msl of vor850 (computed from u&v)
+# input files are netcdf files from ERA5
 trackVar="vor850"
+seas="SON"
 
-ff_u=trackVarDir_u + "ERA5_u_test.nc"
-ff_v=trackVarDir_v + "ERA5_v_test.nc"
-#file_psl="ERA5_mslp_6hr_1950.grb"
-#file_u="ua/ua_6hrPlevPt_EC-Earth3_historical_r1i1p1f1_gr_185001010000-185012311800.nc"
-#file_v="va/va_6hrPlevPt_EC-Earth3_historical_r1i1p1f1_gr_185001010000-185012311800.nc"
+# select years
+y1=2004
+y2=2004
+
+run_track=True
+
+if trackVar == "vor850":
+    trackVarDir_u="/home/ghinassi/work_big/ERA5/u/"
+    trackVarDir_v="/home/ghinassi/work_big/ERA5/v/"
+    if seas:
+        trackVarDir_u=trackVarDir_u + seas + "/"
+        trackVarDir_v=trackVarDir_v + seas + "/"
+elif trackVar == "msl":
+    trackVarDir_msl="/home/ghinassi/work_big/ERA5/msl/"
+    if seas:
+        trackVarDir_msl=trackVarDir_msl + seas + "/"
+else:
+    print("trackVar not recognized")
+    sys.exit(1)
+    
+# set general output directory
+
+refoutDir="/home/ghinassi/work/track_output/test_ERA5/"
+
+
+if seas:
+    suboutDir = seas + "/" + trackVar + "/"
+else:
+    suboutDir = trackVar + "/"
+
+outDir = refoutDir + suboutDir
+Path(outDir).mkdir(parents=True, exist_ok=True)
+
 
 def search_files_expm_seas(directory, expm, ensm, seas, ystart, yend):
     """
-    Search for files in the given directory that match the specified experiment, ensemble, season, and year range.
-
+    Search for files in the given directory with ERA5 standard.
+    example of ERA5 file name: ERA5_msl_6hr_1950.nc
     Args:
         directory (str): The directory to search in.
-        expm (str): The experiment name.
-        ensm (str): The ensemble name.
-        seas (str): The season.
         ystart (int): The start year.
         yend (int): The end year.
+        trackvar: variable you want to track
 
     Returns:
         list: A list of matching file paths.
@@ -53,12 +78,12 @@ def search_files_expm_seas(directory, expm, ensm, seas, ystart, yend):
 def search_files_ERA5(directory, ystart, yend, trackvar=None):
     """
     Search for files in the given directory with ERA5 standard.
-    example of ERA5 file name: ERA5_msl_6hr_1950.grb
-
+    example of ERA5 file name: ERA5_msl_6hr_1950.nc
     Args:
         directory (str): The directory to search in.
         ystart (int): The start year.
         yend (int): The end year.
+        trackvar: variable you want to track
 
     Returns:
         list: A list of matching file paths.
@@ -84,26 +109,41 @@ def search_files_ERA5(directory, ystart, yend, trackvar=None):
     
     return matching_files
 
-# general output directory
-refoutDir="/home/ghinassi/work/track_output/ERA5/"
-seas=None
+def search_files_ERA5_seas(directory, ystart, yend, trackvar=None):
+    """
+    Search for files in the given directory with ERA5 standard.
+    example of ERA5 file name: ERA5_msl_6hr_1950_seas.nc
 
-if seas:
-    suboutDir = seas + "/" + trackVar + "/"
-else:
-    suboutDir = trackVar + "/"
+    Args:
+        directory (str): The directory to search in.
+        ystart (int): The start year.
+        yend (int): The end year.
 
-outDir = refoutDir + suboutDir
-Path(outDir).mkdir(parents=True, exist_ok=True)
+    Returns:
+        list: A list of matching file paths.
+    """
+    matching_files = []
+    
+    for root, dirnames, filenames in os.walk(directory):
+        for filename in filenames:
+            if filename.endswith("_merged.nc"):
+                continue
+            
+            parts = filename[:-3].split('_')
+            var = parts[1]
+            time_res = parts[2]
+            year = int(parts[3])
+            seas1 = parts[4]
+            
+            if var == trackvar and seas1 == seas and ystart <= year <= yend:
+                file_path = os.path.join(root, filename)
+                print(file_path)
+                matching_files.append(file_path)
 
-track_wrapper.track_era5_vor850(ff_u, outDir, ff_v, NH=True, netcdf=False, ysplit=True)
+    matching_files.sort()
+    
+    return matching_files
 
-run_track=True
-
-y1=1950
-y2=1951
-
-raise SystemExit
 
 if run_track:
     print("output directory for TRACK is: ", outDir)
@@ -112,27 +152,40 @@ if run_track:
     if not os.path.exists(outDir):
         os.makedirs(outDir)
     
-    #check if outdir is not empty exit the code for safety
+    """
+    #check if outdir is not empty exit the code for safety (move within loop)
     if os.listdir(outDir):
         print(os.listdir(outDir))
         raise Exception("Output directory is not empty. Please provide an empty directory.")
+    """
     
     if trackVar == "msl":
-        mfile=search_files_ERA5(trackVarDir_msl,y1,y2,trackVar)
-        print (mfile)
+        print("tracking mslp with ERA5 data")
+        if seas is not None:
+            print("season is: ", seas)
+            mfile=search_files_ERA5_seas(trackVarDir_msl,y1,y2,trackVar)
+        else:
+            print("computing tracks for the whole year")
+            mfile=search_files_ERA5(trackVarDir_msl,y1,y2,trackVar)
         for ff in mfile:
-            print(ff)
-            print("tracking mslp on ERA5 data")
-            track_wrapper.track_era5_mslp(ff, refoutDir, NH=True, netcdf=False)
+            print("msl input file is: ", ff)
+            print("tracking mslp with ERA5 data")
+            track_wrapper.track_era5_mslp(ff, outDir, NH=True, netcdf=False, ysplit=False)
     elif trackVar == "vor850":
-        print("tracking vor850 from u&v")
-        mfile_u = search_files_ERA5(trackVarDir_u,y1,y2, trackvar="u")
-        mfile_v = search_files_ERA5(trackVarDir_v,y1,y2, trackvar="v")
+        print("tracking vor850 from u&v with ERA5 data")
+        if seas is not None:
+            print("season is: ", seas)
+            mfile_u = search_files_ERA5_seas(trackVarDir_u,y1,y2, trackvar="u")
+            mfile_v = search_files_ERA5_seas(trackVarDir_v,y1,y2, trackvar="v")
+        else:
+            print("computing tracks for the whole year")
+            mfile_u = search_files_ERA5(trackVarDir_u,y1,y2, trackvar="u")
+            mfile_v = search_files_ERA5(trackVarDir_v,y1,y2, trackvar="v")
         for ff_u, ff_v in zip(mfile_u, mfile_v):
 
             print("u file: ", ff_u)
             print("v file: ", ff_v)
-            track_wrapper.track_era5_vor850(ff_u, outDir, ff_v, NH=True, netcdf=False, ysplit=True)
+            track_wrapper.track_uv_vor850(ff_u, outDir, ff_v, NH=True, netcdf=False, ysplit=False, cmip6=False)
 
 
 

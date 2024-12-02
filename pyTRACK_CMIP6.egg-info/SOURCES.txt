@@ -1,3 +1,4 @@
+LICENSE
 README.md
 setup.py
 pyTRACK_CMIP6.egg-info/PKG-INFO

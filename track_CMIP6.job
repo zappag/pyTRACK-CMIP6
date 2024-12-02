@@ -1,0 +1,8 @@
+#!/bin/bash
+
+#SBATCH -n 1
+#SBATCH --job-name=track_CMIP6
+#SBATCH --time 24:00:00
+#SBATCH --mail-user=p.ghinassi@isac.cnr.it
+
+srun python3 /home/ghinassi/pyTRACK-CMIP6/test_CMIP6.py >> /home/ghinassi/work/slurm_jobs/output_test_CMIP6.txt

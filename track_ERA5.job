@@ -1,0 +1,11 @@
+#!/bin/bash
+
+#SBATCH -n 1
+#SBATCH --mem=2000M
+#SBATCH --job-name=track_ERA5
+#SBATCH --time 24:00:00
+#SBATCH --mail-user=p.ghinassi@isac.cnr.it
+#SBATCH --output=/home/ghinassi/work/slurm_jobs/log/track_ERA5-%j.out
+#SBATCH --error=/home/ghinassi/work/slurm_jobs/err/track_ERA5-%j.err
+
+python test_ERA5.py
