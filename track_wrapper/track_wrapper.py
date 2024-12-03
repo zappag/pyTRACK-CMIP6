@@ -539,7 +539,6 @@ def calc_vorticity(uv_file, outfile, copy_file=True, cmip6=True):
                 nx + "/;s/NY/" + ny + "/;s/LEV/85000/;s/VOR/" + outfile +
                 "/\" indat/calcvor_onelev.in > indat/calcvor_onelev_" + ext + ".in")
     os.system("bin/track.linux -i " + tempname + " -f " + ext + " < indat/calcvor_onelev_" + ext + ".in")
-    raise Exception("STOP")
     os.chdir(cwd) # change back to working directory
 
     return
