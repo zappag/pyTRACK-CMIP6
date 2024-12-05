@@ -204,14 +204,7 @@ def steps_to_dates(tr_fname, filename, hourshift=0, ERA5=False, track_mins=False
     timestring=sdate[0:4]+sdate[5:7]+sdate[8:10]+stime1[0:2]
 
     # shift timestring by amount indicated in hourshift
-
-    # timestring is a date string in the format YYYYMMDDHH
-    # subtract
-  
     timestring=timestring_shift(timestring,hourshift)
-    
-    #timestring = str(int(timestring) + hourshift).zfill(10)
-
     print(f"Time string of initial step is: {timestring}")
 
     # determine increment in hours
