@@ -1441,7 +1441,7 @@ def stats(dirname,tracksname,statstype="std",sy=None,ly=None,ext=None):
     with open(stat_out,'w') as outfile:
         if statstype == "std":
             subprocess.run(["sed","s:tr_trs:"+tr_combined1+":", stat_file],stdout=outfile)
-        if statstype == "add"+fldnum:
+        elif statstype[0:3] == "add":
             subprocess.run(["sed","-e","s:tr_trs:"+tr_combined1+":","-e","s:fldnum:"+str(fldnum)+":", stat_file],stdout=outfile)
 
     
