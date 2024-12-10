@@ -960,3 +960,311 @@ def track_uv_vor850(infile, outdirectory, infile2='none', NH=True, ysplit=False,
 
     os.chdir(cwd)
     return
+
+def tr2nc_mslp(input):
+    """
+    Convert MSLP tracks from ASCII to NetCDF using TR2NC utility
+
+    Parameters
+    ----------
+
+    input : string
+        Path to ASCII file containing tracks
+
+    """
+    fullpath = os.path.abspath(input)
+    cwd = os.getcwd()
+    os.chdir(str(Path.home()) + "/track-master/utils/bin")
+    os.system("tr2nc '" + fullpath + "' s ../TR2NC/tr2nc_mslp.meta.elinor")
+    os.chdir(cwd)
+    return
+
+def tr2nc_vor(input):
+    """
+    Convert vorticity tracks from ASCII to NetCDF using TR2NC utility
+
+    Parameters
+    ----------
+
+    input : string
+        Path to ASCII file containing tracks
+
+    """
+    fullpath = os.path.abspath(input)
+    cwd = os.getcwd()
+    os.chdir(str(Path.home()) + "/track-master/utils/bin")
+    os.system("tr2nc '" + fullpath + "' s ../TR2NC/tr2nc.meta.elinor")
+    os.chdir(cwd)
+    return
+
+def find_directories_with_file(root_dir, file_name):
+    matching_directories = []
+
+    # Iterate over all subdirectories and files in the root directory
+    for dirpath, dirnames, filenames in os.walk(root_dir):
+        if file_name in filenames:
+            matching_directories.append(dirpath)
+
+    return matching_directories
+
+# Specify the root directory where you want to start the search
+root_directory = '/path/to/root_directory'
+
+# Specify the file name you are looking for
+file_to_find = 'example.txt'
+
+# Find directories containing the file
+result = find_directories_with_file(root_directory, file_to_find)
+
+
+## GZ+
+def stats(dirname,tracksname,statstype="std",sy=None,ly=None,ext=None):
+    """
+    dirname : string
+        Path to directory of tracking analysis (not individual years)
+    tracksname : string
+        Name of files to be used for tracking, e.g. tr_trs_pos/tr_trs_neg/ff_trs_pos_TP5mean/..
+    statstype : string referring to the type of stats to be calculated. 
+                - std:  track density/genesys/lysys....
+                - addX: produce mean intensity of added field #X.
+    sy : int
+        Starting year (optional, take all years until ly if not specified)
+    ly : int
+        Last year (optional, take all years from sy if not specified)
+    """
+    
+    # NOTE CHANGE NOMENCLATURE OF OUTPUT FILE TO INTENSITY (FOLLOWED BY NAME ADD FIELD)
+
+    trackmaster=(str(Path.home()) + "/track-master/")
+    utils=(str(Path.home()) + "/track-master/utils/")
+    indat=(str(Path.home()) + "/track-master/indat/")
+    outdat=(str(Path.home()) + "/track-master/outdat/")
+    stats=dirname + "/stats/"
+
+    if not os.path.exists(stats):
+        Path(stats).mkdir(parents=True, exist_ok=True)
+
+    # set stat file type depending on options (test)
+    if statstype == "std":
+        stat_file=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/STATS_standard_template.in"
+    elif statstype[0:3] == "add":
+        stat_file=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/STATS_addfld_template.in"
+        fldnum=statstype[3]
+    stat_file_name=os.path.basename(stat_file)
+
+    # list available track files
+    years_set = set()  # This will store unique years
+    file_list = []
+    for path in Path(dirname).glob(f"*/{tracksname}"):
+        # extract year
+        year=path.parts[-2].split('_')[-2]
+        years_set.add(year)
+        if sy is not None and int(year) < sy:
+            continue
+        if ly is not None and int(year) > ly:
+            continue        
+        file_list.append(path)
+    file_list.sort()
+    ny=len(file_list)
+    
+    if sy is  None:
+        sy=int(min(years_set))
+    if ly is None:
+        ly=int(max(years_set))
+    
+    # sanity check all years are available
+    if ly-sy+1 != ny:
+        print("Missing years in directory for stats calculation")
+        return
+
+    # define extension
+    ext=f"{statstype}_{sy}-{ly}"
+
+    # create combine file
+    os.chdir(dirname)
+    cfile="combine_" + str(sy) + "-" + str(ly) + ".in"
+    if os.path.exists(cfile):
+        os.remove(cfile)
+
+    cfile_obj=open(cfile,'w')
+    cfile_obj.write(str(ny) + "\n")
+    cfile_obj.write('2\n')
+    cfile_obj.write('3\n')
+    for path in file_list:
+        cfile_obj.write(str(path) + "\n")
+    cfile_obj.close()
+
+    # run combine utility
+    os.chdir(stats)
+    command=utils + "bin/combine < " + dirname + "/" + cfile
+    os.system(command)
+    tr_combined=stats+'/'+'combined_tr_trs'
+    tr_combined1=f"{stats}/combined_{tracksname}_{sy}-{ly}"
+    os.system(f"mv {tr_combined} {tr_combined1}")
+
+    # update stats file replacing string
+    stat_file1=stat_file_name.replace("template",f"{tracksname}_{sy}-{ly}")
+    stat_out=f"{indat}/{stat_file1}"
+    with open(stat_out,'w') as outfile:
+        if statstype == "std":
+            subprocess.run(["sed","s:tr_trs:"+tr_combined1+":", stat_file],stdout=outfile)
+        elif statstype[0:3] == "add":
+            subprocess.run(["sed","-e","s:tr_trs:"+tr_combined1+":","-e","s:fldnum:"+str(fldnum)+":", stat_file],stdout=outfile)
+
+    
+    # copy gridT63 file
+    os.system(f"cp {Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/gridT63.dat {indat}")
+
+    # # update all_pr_in
+    # allpr_out=stats+"all_pr_in"
+    # with open(allpr_out,'w') as outfile:
+    #     subprocess.run(["sed","s:STAT_FILE:"+str(stat_file1)+":", indat + "all_pr_in"],stdout=outfile)
+    # os.system("chmod u+x " + stats + "all_pr_in")
+
+    # run stats
+    os.chdir(trackmaster)
+    os.system("bin/track.linux " + " -f " + ext + " < " + stat_out)
+
+    # standard output files
+    sstat="stat_trs." + ext
+    sstat_nc="stat_trs." + ext + "_1.nc"
+    sstat_scl="stat_trs_scl." + ext
+    sstat_scl_nc="stat_trs_scl." + ext + "_1.nc"
+    # renamed output files
+    sstat1=sstat.replace("stat_trs",f"{tracksname}")
+    sstat_nc1=sstat_nc.replace("stat_trs",f"{tracksname}")
+    sstat_scl1=sstat_scl.replace("stat_trs",f"{tracksname}")
+    sstat_scl_nc1=sstat_scl_nc.replace("stat_trs",f"{tracksname}")
+
+    subprocess.run(["mv", outdat + sstat_nc , stats + sstat_nc1])
+    subprocess.run(["mv", outdat + sstat_scl_nc , stats + sstat_scl_nc1])
+    subprocess.run(["mv", dirname + "/" + cfile, stats + "/" + cfile])
+    subprocess.run(["mv", stat_out, stats + "/" + stat_file1]) 
+
+
+    subprocess.run(["rm", outdat + sstat])
+    subprocess.run(["rm", outdat + sstat_scl])
+    subprocess.run(["rm", outdat + "initial." + ext])
+    subprocess.run(["rm", outdat + "init_trs." + ext])
+    subprocess.run(["rm", outdat + "disp_trs." + ext])
+    subprocess.run(["rm", outdat + "ff_trs." + ext])
+    subprocess.run(["rm", outdat + "ff_trs." + ext + '.nc'])
+
+
+def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, cmip6=True):
+    # infile: precipitation or other field (.nc) to be associated to the tracks
+    # trackfile: full path to track file to be used
+    # fieldname: name of the field to be added in the input file (as in the .nc file)
+    # radius: radius of the area in which the field is avaraged
+    # scaling: scaling factor for the field to be added
+    # hourshift: controls the time of the tracks dates/. They will normally take the time as in infile.nc, but you may want to check for consistency with previous track file, and shift accordingly. 
+    # cmip6: True if input file is from CMIP6, False if from ERA5
+     
+    # check infile exists
+    if not os.path.exists(infile):
+        raise Exception("Input file does not exist.")
+  
+    # read data charactheristics
+    if cmip6==True:
+        data = data_indat(infile,'cmip6')
+    else:
+        data = data_indat(infile,'era5')
+
+    if fieldname not in data.vars:
+        raise Exception("Invalid input variable type. Please input a file with the desired field.")
+    nx, ny = data.get_nx_ny()
+
+    print("Starting preprocessing add field.")
+    print("Remove unnecessary variables.")
+    infile_e = infile[:-3] + "_extr.nc"
+
+    if not os.path.exists(infile_e):
+        if "time_bnds" in data.vars:
+            ncks = "time_bnds"
+            if "lat_bnds" in data.vars:
+                ncks += ",lat_bnds,lon_bnds"
+            os.system("ncks -C -O -x -v " + ncks + " " + infile + " " + infile_e)
+        elif "lat_bnds" in data.vars:
+            os.system("ncks -C -O -x -v lat_bnds,lon_bnds " + infile + " " + infile_e)
+        else:
+            infile_e = infile 
+
+    # setup input file
+    inputfile_template=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/template_addmean.in"
+    
+    # revise NY
+    nx, ny = data.get_nx_ny()
+    if data.has_nh_pole():
+        # remove one latitude grid point from ny (string)
+        ny = str(int(ny)-1)
+        sed_nh_string="-e 's:NH:n:' "
+    else:
+        sed_nh_string="-e 's:NH:d:' "
+
+    if data.has_sh_pole():
+        ny = str(int(ny)-1)
+        sed_sh_string="-e 's:SH:n:' "
+    else:
+        sed_sh_string="-e 's:SH:d:' "
+
+    if data.has_equator():
+        sed_eq_string="-e 's:equator:n:' "
+        ny = str(int(ny)-1)
+    else:
+        sed_eq_string="-e ':equator:d:' "
+    
+    # prepare adapt input file
+    radiusp=str(int(radius)+1)+".0"
+    line1 = (
+        f"sed -e 's:NX:{nx}:' "
+        f"-e 's:NY:{ny}:' "
+        f"-e 's:scaling:{scaling}:' "
+        f"-e 's:radius:{radiusp} {radius}:' "
+        f"{sed_nh_string}"
+        f"{sed_sh_string}"
+        f"{sed_eq_string}"
+        f"-e 's:trackfilefullpath:{trackfile}:' "
+        f"-e 's:ncfiletobeadded:{infile_e}:' "
+        f"{inputfile_template} > addprec.in"
+    )
+    print(line1)
+
+    ext=str(random.randint(0, 100000))
+    line2=f"bin/track.linux -f {ext} < addprec.in"
+
+    # run adapt input file
+    cwd = os.getcwd()
+    os.chdir(str(Path.home()) + "/track-master")
+
+    os.system(line1)
+    os.system(line2)
+
+    # filenames
+    # input track filename
+    trackfilename=os.path.basename(trackfile)
+
+    # manage output
+    trackfileout=f"{trackfile}.{fieldname}{str(radius)[0]}mean"
+    os.system(f"mv outdat/ff_trs.{ext}_addfld {trackfileout}")
+
+     # output track filename and directory
+    trackfileoutdir=os.path.dirname(trackfileout)
+    trackfileoutname=os.path.basename(trackfileout)
+
+    # steps to dates
+    steps_to_dates(trackfileout, infile, hourshift=hourshift)
+
+    # check dates consistency
+    command = f"sed -n '6p' {trackfileoutdir}/dates/{trackfilename} | awk '{{print $1}}'"
+    old_date=subprocess.check_output(command, shell=True, text=True).strip()
+    command = f"sed -n '6p' {trackfileoutdir}/dates/{trackfileoutname} | awk '{{print $1}}'"
+    new_date=subprocess.check_output(command, shell=True, text=True).strip()
+    if old_date != new_date:
+        print("WARNING: Dates in the track file and in the added field file do not match. Please check. Consider using the hourshift option.")
+
+    # cleanup
+    os.system(f"rm outdat/initial.{ext}")
+    os.system(f"rm outdat/ff_trs.{ext}")
+    os.system(f"rm outdat/ff_trs.{ext}.nc")
+
+    return
