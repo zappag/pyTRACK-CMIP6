@@ -29,7 +29,7 @@ if run_add:
     for year in range(year1, year2 + 1):
         add_var_file = f"/home/ghinassi/work_big/ERA5/total_precipitation/{seas}/ERA5_total_precipitation_6hT00_{year}_{seas}.nc"
         track_file = f"/home/ghinassi/work/track_output/ERA5/{seas}/{track_var}/NH_ERA5_msl_6hr_{year}_{seas}/ff_trs_neg"
-        track_wrapper.add_mean_field(add_var_file, track_file, radius, track_var_add, scaling=1000, hourshift=-5, cmip6=False)
+        track_wrapper.add_mean_field(add_var_file, track_file, radius, track_var_add, scaling=1000, hourshift=0, cmip6=False)
 
 if run_stats:
     # test stats
