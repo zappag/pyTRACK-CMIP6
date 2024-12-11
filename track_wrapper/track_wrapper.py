@@ -12,7 +12,7 @@ cdo = Cdo()
 __all__ = ['cmip6_indat', 'regrid_cmip6', 'setup_files', 'calc_vorticity',
            'track_mslp', 'track_uv_vor850', 'setup_tr2nc',
            'tr2nc_mslp', 'tr2nc_vor','stats','steps_to_dates',
-           'add_mean_field']
+           'add_field']
 
 class cmip6_indat(object):
     """Class to obtain basic information about the CMIP6 input data."""
@@ -1151,12 +1151,13 @@ def stats(dirname,tracksname,statstype="std",sy=None,ly=None,ext=None):
     subprocess.run(["rm", outdat + "ff_trs." + ext + '.nc'])
 
 
-def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, cmip6=True):
+def add_field(infile, trackfile, radius, fieldname, meanfield=False, scaling=1,hourshift=0, cmip6=True):
     # infile: precipitation or other field (.nc) to be associated to the tracks
     # trackfile: full path to track file to be used
     # fieldname: name of the field to be added in the input file (as in the .nc file)
     # radius: radius of the area in which the field is avaraged
     # scaling: scaling factor for the field to be added
+    # meanfield : True if the field to be added is a mean field, False otherwise
     # hourshift: controls the time of the tracks dates/. They will normally take the time as in infile.nc, but you may want to check for consistency with previous track file, and shift accordingly. 
     # cmip6: True if input file is from CMIP6, False if from ERA5
      
@@ -1244,7 +1245,10 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
     trackfilename=os.path.basename(trackfile)
 
     # manage output
-    trackfileout=f"{trackfile}.{fieldname}{str(radius)[0]}mean"
+    if meanfield==True:
+        trackfileout=f"{trackfile}.{fieldname}_rad{str(radius)[0]}_mean"
+    else:
+        trackfileout=f"{trackfile}.{fieldname}_rad{str(radius)[0]}"
     os.system(f"mv outdat/ff_trs.{ext}_addfld {trackfileout}")
 
      # output track filename and directory
