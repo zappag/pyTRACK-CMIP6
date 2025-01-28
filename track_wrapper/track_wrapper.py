@@ -1484,7 +1484,7 @@ def stats(dirname,tracksname,statstype="std",sy=None,ly=None,ext=None):
     subprocess.run(["rm", outdat + "ff_trs." + ext + '.nc'])
 
 
-def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, cmip6=True):
+def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, missing=False, cmip6=True,operation="mean"):
     # infile: precipitation or other field (.nc) to be associated to the tracks
     # trackfile: full path to track file to be used
     # fieldname: name of the field to be added in the input file (as in the .nc file)
@@ -1522,9 +1522,24 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
         else:
             infile_e = infile 
 
+    # fill missing values
+    if missing==False:
+        infile_ef = infile_e[:-3] + "_filled.nc"
+        if os.path.isfile(infile_ef):
+            print("File without fillValue and missing_value already exists.")
+        else:
+            os.system("ncatted -a _FillValue,,d,, -a missing_value,,d,, " + infile_e +
+                  " " + infile_ef)
+            print("Filled/missing attributes removed") 
+    else:
+        raise Exception("Missing values in input file. NEED TO UPDATE CODE TO HANDLE THIS CASE.")
+
     # setup input file
-    inputfile_template=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/template_addmean.in"
-    
+    if operation=="mean":
+        inputfile_template=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/template_addmean.in"
+    elif operation=="min" or operation=="max":
+        inputfile_template=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/template_addminmax.in"
+
     # revise NY
     nx, ny = data.get_nx_ny()
     if data.has_nh_pole():
@@ -1546,6 +1561,14 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
     else:
         sed_eq_string="-e ':equator:d:' "
     
+    # if operation is equal to min or max
+    sed_minmax_string="-e 's:minmax:0:' " # dummy
+    if operation=="min":
+        sed_minmax_string="-e 's:minmax:-1:' "
+    
+    if operation=="max":
+        sed_minmax_string="-e 's:minmax:1:' "
+
     # prepare adapt input file
     radiusp=str(int(radius)+1)+".0"
     line1 = (
@@ -1556,8 +1579,9 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
         f"{sed_nh_string}"
         f"{sed_sh_string}"
         f"{sed_eq_string}"
+        f"{sed_minmax_string}"
         f"-e 's:trackfilefullpath:{trackfile}:' "
-        f"-e 's:ncfiletobeadded:{infile_e}:' "
+        f"-e 's:ncfiletobeadded:{infile_ef}:' "
         f"{inputfile_template} > addprec.in"
     )
     print(line1)
@@ -1577,7 +1601,7 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
     trackfilename=os.path.basename(trackfile)
 
     # manage output
-    trackfileout=f"{trackfile}.{fieldname}{str(radius)[0]}mean"
+    trackfileout=f"{trackfile}.{fieldname}{str(radius)[0]}{operation}"
     os.system(f"mv outdat/ff_trs.{ext}_addfld {trackfileout}")
 
      # output track filename and directory
