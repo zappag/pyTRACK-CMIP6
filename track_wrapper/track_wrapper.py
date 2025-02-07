@@ -208,10 +208,12 @@ def steps_to_dates(tr_fname, filename, hourshift=0, ERA5=False, track_mins=False
     print(f"Time string of initial step is: {timestring}")
 
     # determine increment in hours
-    if ERA5:
-        timedelta=int(stime2[0:2])-int(stime1[0:2])
-    else:
-        timedelta=6
+    #if ERA5:
+    print(stime1,stime2,timestring)
+    timedelta=int(stime2[0:2])-int(stime1[0:2])
+    if timedelta==0: # FIX THIS IS AN ASSUMPTION! ... SHOULD BE FIXED IN THE FUTURE
+        timedelta=24
+   
     print(f"Time incrment is {timedelta}h")
 
     # make subidrectories with dates
@@ -1628,7 +1630,7 @@ def subsample_timesteps(track_file, step, offset=0):
     # track_file: full path to track file to be used
     # step: interval of subsampline in time steps
     # offset: offset in time steps (0 no offset)
-    
+
     cwd = os.getcwd()
 
     # directory with track file
