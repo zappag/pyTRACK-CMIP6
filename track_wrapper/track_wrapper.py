@@ -1521,7 +1521,7 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
             os.system("ncks -C -O -x -v lat_bnds,lon_bnds " + infile + " " + infile_e)
         else:
             infile_e = infile 
-
+    
     # fill missing values
     if missing==False:
         infile_ef = infile_e[:-3] + "_filled.nc"
@@ -1547,19 +1547,19 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
         ny = str(int(ny)-1)
         sed_nh_string="-e 's:NH:n:' "
     else:
-        sed_nh_string="-e 's:NH:d:' "
+        sed_nh_string="-e '/NH/d' "
 
     if data.has_sh_pole():
         ny = str(int(ny)-1)
         sed_sh_string="-e 's:SH:n:' "
     else:
-        sed_sh_string="-e 's:SH:d:' "
+        sed_sh_string="-e '/SH/d' "
 
     if data.has_equator():
         sed_eq_string="-e 's:equator:n:' "
         ny = str(int(ny)-1)
     else:
-        sed_eq_string="-e ':equator:d:' "
+        sed_eq_string="-e '/equator/d' "
     
     # if operation is equal to min or max
     sed_minmax_string="-e 's:minmax:0:' " # dummy
