@@ -12,7 +12,7 @@ cdo = Cdo()
 __all__ = ['cmip6_indat', 'regrid_cmip6', 'setup_files', 'calc_vorticity',
            'track_mslp', 'track_uv_vor850', 'setup_tr2nc',
            'tr2nc_mslp', 'tr2nc_vor','stats','steps_to_dates',
-           'add_mean_field']
+           'add_mean_field', 'subsample_timesteps']
 
 class cmip6_indat(object):
     """Class to obtain basic information about the CMIP6 input data."""
@@ -1624,6 +1624,50 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
     os.system(f"rm outdat/ff_trs.{ext}")
     os.system(f"rm outdat/ff_trs.{ext}.nc")
 
+def subsample_timesteps(track_file, step, offset=0):
+    # track_file: full path to track file to be used
+    # step: interval of subsampline in time steps
+    # offset: offset in time steps (0 no offset)
+    
+    cwd = os.getcwd()
+
+    # directory with track file
+    track_dir = os.path.dirname(track_file)
+    track_name= os.path.basename(track_file)
+
+    # create directory with subsample data
+    if step==4 and offset==2:
+        subsampledir=f"{track_dir}/subsampled_day12h/"
+    else:
+        subsampledir=f"{track_dir}/subsampled_S{step}_O{offset}/"
+    os.system(f'mkdir -p {subsampledir}')
+
+    # move to track-master
+    os.chdir(str(Path.home()) + "/track-master")
+
+    # prepare input file
+    inputfile_template=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/template_subsample_tsteps.in"
+    ext=str(random.randint(0, 100000))
+    line1 = (
+        f"sed -e 's:step:{step}:' "
+        f"-e 's:offset:{offset}:' "
+        f"-e 's:ff_trs:{track_file}:' "
+        f"{inputfile_template} > indat/subsample_tsteps_{ext}.in"
+    )
+
+    line2=f"bin/track.subsample -f {ext} < indat/subsample_tsteps_{ext}.in"
+
+    # run adapt input file
+    os.system(line1)
+    os.system(line2)
+
+    # move output file
+    os.system(f"mv outdat/tr_trs.{ext}_filt {subsampledir}/{track_name}")
+
+    # cleanup
+    os.system(f"rm outdat/initial.{ext}")
+    os.system(f"rm outdat/ff_trs.{ext}")
+    os.system(f"rm outdat/ff_trs.{ext}.nc")
     return
     
     
