@@ -1534,7 +1534,9 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
                   " " + infile_ef)
             print("Filled/missing attributes removed") 
     else:
-        raise Exception("Missing values in input file. NEED TO UPDATE CODE TO HANDLE THIS CASE.")
+        # set missing values to 9999999999
+        infile_ef = infile_e[:-3] + "_filled.nc"
+        os.system("cdo setmisstoc,1.e+25 " + infile_e + " " + infile_ef)
 
     # setup input file
     if operation=="mean":
@@ -1571,6 +1573,11 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
     if operation=="max":
         sed_minmax_string="-e 's:minmax:1:' "
 
+    if missing==False:
+        sed_missing_string="-e 's:missing:n:' "
+    elif missing==True:
+        sed_missing_string="-e 's:missing:y\n1000000\n2:' "
+
     # prepare adapt input file
     radiusp=str(int(radius)+1)+".0"
     line1 = (
@@ -1582,6 +1589,7 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
         f"{sed_sh_string}"
         f"{sed_eq_string}"
         f"{sed_minmax_string}"
+        f"{sed_missing_string}"
         f"-e 's:trackfilefullpath:{trackfile}:' "
         f"-e 's:ncfiletobeadded:{infile_ef}:' "
         f"{inputfile_template} > addprec.in"
