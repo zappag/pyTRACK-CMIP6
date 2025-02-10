@@ -1495,6 +1495,8 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
     # hourshift: controls the time of the tracks dates/. They will normally take the time as in infile.nc, but you may want to check for consistency with previous track file, and shift accordingly. 
     # cmip6: True if input file is from CMIP6, False if from ERA5
      
+
+
     # check infile exists
     if not os.path.exists(infile):
         raise Exception("Input file does not exist.")
@@ -1536,7 +1538,7 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
     else:
         # set missing values to 9999999999
         infile_ef = infile_e[:-3] + "_filled.nc"
-        os.system("cdo setmisstoc,1.e+25 " + infile_e + " " + infile_ef)
+        os.system("cdo setmisstoc,1000000000000000000 " + infile_e + " " + infile_ef)
 
     # setup input file
     if operation=="mean":
@@ -1574,9 +1576,9 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
         sed_minmax_string="-e 's:minmax:1:' "
 
     if missing==False:
-        sed_missing_string="-e 's:missing:n:' "
+        sed_missing_string="-e 's:missing:n:' -e '/miss1ing/d' -e '/miss2ing/d' "
     elif missing==True:
-        sed_missing_string="-e 's:missing:y\n1000000\n2:' "
+        sed_missing_string="-e 's:missing:y:' -e 's:miss1ing:1000000000:' -e 's:miss2ing:2:' "
 
     # prepare adapt input file
     radiusp=str(int(radius)+1)+".0"
