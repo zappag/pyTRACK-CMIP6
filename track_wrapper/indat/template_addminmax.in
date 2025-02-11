@@ -36,13 +36,14 @@ n
 1
 n
 0
+center
 n
 0
 1
 ncfiletobeadded
 scaling
 minmax
-1
+interpolationGeneral
 1
 missing
 miss1ing
@@ -52,7 +53,7 @@ n
 n
 radius
 0
-0
-0
-0.
+interpolation
+interp1
+interp2
 0

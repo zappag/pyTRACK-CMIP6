@@ -40,6 +40,7 @@ n
 0
 0
 0
+center
 n
 0
 1
@@ -52,7 +53,7 @@ n
 0
 n
 radius
-0
-0
-0.
+interpolation
+interp1
+interp2
 0

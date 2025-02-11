@@ -130,6 +130,40 @@ class data_indat(object):
             else:
                 return False
 
+class track_indat(object):
+    """Class to obtain basic information about a track file."""
+    def __init__(self, filename):
+        """
+        Reads the track file file and scans its input
+
+        Parameters
+        ----------
+
+
+        filename : string
+            Filename of a track file containing 
+
+        """
+        self.filename = filename
+        self.data = open(filename,'r')
+
+    def get_n_added_vars(self):
+        # returns number of added fields on the file
+        for line in self.data:
+            # reads value after ADD_FLD
+            if 'ADD_FLD' in line:
+                parts = line.split()
+                add_fld_index = parts.index('ADD_FLD')
+                if add_fld_index + 1 < len(parts):
+                    print("ciao")
+                    print(parts)
+                    print(add_fld_index)
+                    value = parts[add_fld_index + 1]
+                    print(value)
+                    return value
+                else:
+                    raise ValueError("No value found after ADD_FLD")
+
 def setup_files():
     """
     Configure template input files according to local machine setup 
@@ -1486,7 +1520,7 @@ def stats(dirname,tracksname,statstype="std",sy=None,ly=None,ext=None):
     subprocess.run(["rm", outdat + "ff_trs." + ext + '.nc'])
 
 
-def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, missing=False, cmip6=True,operation="mean"):
+def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, missing=False, cmip6=True,operation="mean",interpolation="spline",centering="default"):
     # infile: precipitation or other field (.nc) to be associated to the tracks
     # trackfile: full path to track file to be used
     # fieldname: name of the field to be added in the input file (as in the .nc file)
@@ -1494,8 +1528,10 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
     # scaling: scaling factor for the field to be added
     # hourshift: controls the time of the tracks dates/. They will normally take the time as in infile.nc, but you may want to check for consistency with previous track file, and shift accordingly. 
     # cmip6: True if input file is from CMIP6, False if from ERA5
-     
-
+    # operation: mean, min, max
+    # interpolation: bicubic-spline (no missing), nearest
+    
+    trackdata=track_indat(trackfile)
 
     # check infile exists
     if not os.path.exists(infile):
@@ -1539,12 +1575,17 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
         # set missing values to 9999999999
         infile_ef = infile_e[:-3] + "_filled.nc"
         os.system("cdo setmisstoc,1000000000000000000 " + infile_e + " " + infile_ef)
+        print("Missing Values: forcing interplation method to nearest")
+        interpolation="nearest"
 
     # setup input file
     if operation=="mean":
         inputfile_template=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/template_addmean.in"
+        interpolation="nearest" # not used, helps with code efficiency
     elif operation=="min" or operation=="max":
         inputfile_template=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/template_addminmax.in"
+
+    # check if trackfile already has added fields
 
     # revise NY
     nx, ny = data.get_nx_ny()
@@ -1580,6 +1621,19 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
     elif missing==True:
         sed_missing_string="-e 's:missing:y:' -e 's:miss1ing:1000000000:' -e 's:miss2ing:2:' "
 
+    if interpolation=="spline":
+        sed_interpolation_string=" -e 's:interpolationGeneral:0:' -e 's:interpolation:0:' -e 's:interp1:0:' -e 's:interp2:0.:' "
+    elif interpolation=="nearest":
+        sed_interpolation_string=" -e 's:interpolationGeneral:1:' -e 's:interpolation:1:' -e '/interp1/d' -e '/interp2/d' "
+
+    nadds=trackdata.get_n_added_vars()
+    if int(nadds) == 0:
+        sed_center_string=" -e '/center/d' "
+    elif int(nadds) > 0 and centering == 'default':
+        sed_center_string=" -e 's:center:0:' "
+    else:
+        raise Exception("Centering on added fields not currenlty implemented")
+    
     # prepare adapt input file
     radiusp=str(int(radius)+1)+".0"
     line1 = (
@@ -1592,6 +1646,8 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
         f"{sed_eq_string}"
         f"{sed_minmax_string}"
         f"{sed_missing_string}"
+        f"{sed_interpolation_string}"
+        f"{sed_center_string}"
         f"-e 's:trackfilefullpath:{trackfile}:' "
         f"-e 's:ncfiletobeadded:{infile_ef}:' "
         f"{inputfile_template} > addprec.in"
