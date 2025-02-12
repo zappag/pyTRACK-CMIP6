@@ -155,11 +155,7 @@ class track_indat(object):
                 parts = line.split()
                 add_fld_index = parts.index('ADD_FLD')
                 if add_fld_index + 1 < len(parts):
-                    print("ciao")
-                    print(parts)
-                    print(add_fld_index)
                     value = parts[add_fld_index + 1]
-                    print(value)
                     return value
                 else:
                     raise ValueError("No value found after ADD_FLD")
@@ -239,7 +235,7 @@ def steps_to_dates(tr_fname, filename, hourshift=0, ERA5=False, track_mins=False
 
     # shift timestring by amount indicated in hourshift
     timestring=timestring_shift(timestring,hourshift)
-    print(f"Time string of initial step is: {timestring}")
+    print(f"STEPS2DATES: Time string of initial step is: {timestring}")
 
     # determine increment in hours
     #if ERA5:
@@ -248,7 +244,7 @@ def steps_to_dates(tr_fname, filename, hourshift=0, ERA5=False, track_mins=False
     if timedelta==0: # FIX THIS IS AN ASSUMPTION! ... SHOULD BE FIXED IN THE FUTURE
         timedelta=24
    
-    print(f"Time incrment is {timedelta}h")
+    print(f"STEPS2DATES: Time incrment is {timedelta}h")
 
     # make subidrectories with dates
     track_output_dir=os.path.dirname(tr_fname)
@@ -1492,7 +1488,9 @@ def stats(dirname,tracksname,statstype="std",sy=None,ly=None,ext=None):
 
     # run stats
     os.chdir(trackmaster)
-    os.system("bin/track.linux " + " -f " + ext + " < " + stat_out)
+    #os.system("bin/track.linux " + " -f " + ext + " < " + stat_out + " > output_stats_" + ext + ".log 2>&1")
+    os.system("bin/track.linux " + " -f " + ext + " < " + stat_out + " 1>/dev/null 2>&1")
+
 
     # standard output files
     sstat="stat_trs." + ext
@@ -1655,7 +1653,8 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
     print(line1)
 
     ext=str(random.randint(0, 100000))
-    line2=f"bin/track.linux -f {ext} < addprec.in"
+    #line2=f"bin/track.linux -f {ext} < addprec.in > + addfield_{ext}.log 2>&1"
+    line2=f"bin/track.linux -f {ext} < addprec.in 1>/dev/null 2>&1"
 
     # run adapt input file
     cwd = os.getcwd()
@@ -1680,13 +1679,16 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
     steps_to_dates(trackfileout, infile, hourshift=hourshift)
 
     # check dates consistency
-    command = f"sed -n '6p' {trackfileoutdir}/dates/{trackfilename} | awk '{{print $1}}'"
-    old_date=subprocess.check_output(command, shell=True, text=True).strip()
-    command = f"sed -n '6p' {trackfileoutdir}/dates/{trackfileoutname} | awk '{{print $1}}'"
-    new_date=subprocess.check_output(command, shell=True, text=True).strip()
-    if old_date != new_date:
-        print("WARNING: Dates in the track file and in the added field file do not match. Please check. Consider using the hourshift option.")
-
+    if os.path.exists(f"{trackfileoutdir}/dates/{trackfilename}"):
+        command = f"sed -n '6p' {trackfileoutdir}/dates/{trackfilename} | awk '{{print $1}}'"
+        old_date=subprocess.check_output(command, shell=True, text=True).strip()
+        command = f"sed -n '6p' {trackfileoutdir}/dates/{trackfileoutname} | awk '{{print $1}}'"
+        new_date=subprocess.check_output(command, shell=True, text=True).strip()
+        if old_date != new_date:
+            print("WARNING: Dates in the track file and in the added field file do not match. Please check. Consider using the hourshift option.")
+    else:
+        print("WARNING: No previoius consistent track file name in dates/ subfolder, for dates comparison. Please check.")
+    
     # cleanup
     os.system(f"rm outdat/initial.{ext}")
     os.system(f"rm outdat/ff_trs.{ext}")
