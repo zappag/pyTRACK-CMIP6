@@ -12,7 +12,7 @@ cdo = Cdo()
 __all__ = ['cmip6_indat', 'regrid_cmip6', 'setup_files', 'calc_vorticity',
            'track_mslp', 'track_uv_vor850', 'setup_tr2nc',
            'tr2nc_mslp', 'tr2nc_vor','stats','steps_to_dates',
-           'add_mean_field', 'subsample_timesteps']
+           'add_mean_field', 'subsample_timesteps', 'radial_maps']
 
 class cmip6_indat(object):
     """Class to obtain basic information about the CMIP6 input data."""
@@ -72,12 +72,15 @@ class data_indat(object):
 
     def get_nx_ny(self):
         # returns number of latitudes and longitudes in the grid
-        if self.data_type == 'era5':
+        if 'longitude' in self.data.variables and 'latitude' in self.data.variables:
             return str(len(self.data.variables['longitude'][:])), \
-                    str(len(self.data.variables['latitude'][:]))
-        elif self.data_type == 'cmip6':
+                   str(len(self.data.variables['latitude'][:]))
+        elif 'lon' in self.data.variables and 'lat' in self.data.variables:
             return str(len(self.data.variables['lon'][:])), \
-                    str(len(self.data.variables['lat'][:]))
+                   str(len(self.data.variables['lat'][:]))
+        else:
+            raise ValueError("Longitude and latitude variables not found in the data.")
+
 
     def get_grid_type(self):
         # returns the grid type
@@ -597,7 +600,7 @@ def calc_vorticity(uv_file, outfile, copy_file=True, cmip6=True):
 # =============
 #
 
-def track_mslp(input, outdirectory, NH=True, ysplit=False, cmip6=True):
+def track_mslp(input, outdirectory, NH=True, ysplit=False, cmip6=True, keepSpectralFiltered=False):
     """
     Run TRACK on CMIP6 sea level pressure data.
 
@@ -774,7 +777,11 @@ def track_mslp(input, outdirectory, NH=True, ysplit=False, cmip6=True):
         # cleanup
         os.system(line_4)    
         os.system("rm indat/"+year_file)
-        os.system("rm indat/"+fname)
+        if keepSpectralFiltered:
+            input_s=input[:-3] + "_specfilt.nc"
+            os.system("converters/bin2nc indat/" + fname + " " + input_s)
+        else:
+            os.system("rm indat/"+fname)
             
     os.chdir(cwd)
 
@@ -988,336 +995,6 @@ def track_uv_vor850(infile, outdirectory, infile2='none', NH=True, ysplit=False,
 
     os.chdir(cwd)
     return
-
-# def track_era5_mslp(input, outdirectory, NH=True, netcdf=True, ysplit=False):
-#     """
-#     Run TRACK on ERA5 mean sea level pressure data.
-
-#     Parameters
-#     ----------
-
-#     input : string
-#         Path to .nc file containing ERA5 mslp data.
-
-#     outdirectory : string
-#         Path of directory to output tracks to.
-
-#     NH : boolean, optional
-#         If true, tracks the Northern Hemisphere. If false, tracks Southern
-#         Hemisphere.
-
-#     netcdf : boolean, optional
-#         If true, converts TRACK output to netCDF format using TR2NC utility.
-
-#     """
-#     outdir = os.path.abspath(os.path.expanduser(outdirectory))
-#     input_basename = os.path.basename(input)
-    
-#     if input_basename[-3:] == ".nc":
-#         data = Dataset(input, 'r')
-#     elif input_basename[-4:] == ".grb":
-#         data = cfgrib.open_dataset(input)
-#     else:
-#         raise Exception("Invalid input file type. Please input a .nc or .grb file.")
-    
-#     vars = [var for var in data.variables]
-#     nx = str(len(data.variables['longitude'][:]))
-#     ny = str(len(data.variables['latitude'][:]))
-
-#     if vars[-1] != "msl":
-#         raise Exception("Invalid input variable type. Please input ERA5 mslp file.")
-
-#     years = cdo.showyear(input=input)[0].split()
-
-#     # create link of data to TRACK indat directory
-#     os.system("ln -fs '" + input + "' " + str(Path.home()) + "/track-master/indat/" + input_basename)
-#     print("Data linked into TRACK/indat directory.")
-
-#     # change working directory
-#     cwd = os.getcwd()
-#     os.chdir(str(Path.home()) + "/track-master")
-
-#     if NH == True:
-#         hemisphere = "NH"
-#     else:
-#         hemisphere = "SH"
-
-#     if not ysplit:
-#         years=[years[-1]]
-
-#     # do tracking for one year at a time
-#     for year in years:
-#         # select year from data
-#         if ysplit:
-#             print("Splitting: " + year)
-#             year_file = input_basename[:-3] + "_" + year + ".nc"
-#             cdo.selyear(year, input="indat/"+input_basename, output="indat/"+year_file)
-#             c_input = year + "_" + hemisphere + "_" + input_basename[:-3]
-#         else:
-#             year_file=input_basename
-#             c_input = hemisphere + "_" + input_basename[:-3]
-        
-#         # get number of timesteps and number of chunks for tracking
-#         ntime = int(len(data.variables['time'][:]))
-#         nchunks = ceil(ntime/62)
-
-#         # spectral filtering
-#         # NOTE: NORTHERN HEMISPHERE; add SH option???
-#         fname = "T63filt_" + c_input +  ".dat"
-#         ext=c_input
-        
-#         line_1 = "sed -e \"s/NX/" + nx + "/;s/NY/" + ny + \
-#                     "/;s/TRUNC/63/\" specfilt_nc.in > spec.test"
-#         line_3 = "mv outdat/specfil." + ext + "_band001 indat/" + fname
-#         # NH
-#         line_5 = "master -c=" + c_input + " -e=track.linux -d=now -i=" + \
-#                     fname + " -f=" + ext + \
-#                     " -j=RUN_AT.in -k=initial.T63_" + hemisphere + \
-#                     " -n=1,62," + str(nchunks) + " -o='" + outdir + \
-#                     "' -r=RUN_AT_ -s=RUNDATIN.MSLP"
-
-#         line_2 = "bin/track.linux -i " + year_file + " -f " + ext + \
-#                     " < spec.test"
-#         line_4 = "rm outdat/specfil." + ext + "_band000 outdat/interp_th." + ext
-
-#         # setting environment variables
-#         os.environ["CC"] = "gcc"
-#         os.environ["FC"] = "gfortran"
-#         os.environ["ARFLAGS"] = ""
-#         os.environ["PATH"] += ":." 
-
-#         # executing the lines to run TRACK
-#         print("Spectral filtering...")
-#         os.system(line_1)
-#         os.system(line_2)
-#         os.system(line_3)
-
-#         print("Running TRACK...")
-#         os.system(line_5)
-
-#         print("Converting steps to dates")
-        
-#         # set track mins to True to convert only the minimum of mslp
-#         steps_to_dates(outdir + "/" + c_input, "indat/"+year_file, track_mins=True)
-
-#         # move .nc output to outdir
-#         os.system("mv outdat/ff_trs." + ext + ".nc " + outdir + "/" + c_input + "/.")
-#         os.system("mv outdat/tr_trs." + ext + ".nc " + outdir + "/" + c_input + "/.")
-        
-#         # cleanup
-#         os.system(line_4)    
-#         os.system("rm indat/"+year_file)
-#         os.system("rm indat/"+fname)
-        
-#         # if netcdf == True:
-#         #     print("Turning track output to netCDF...")
-#         #     # tr2nc - turn tracks into netCDF files
-#         #     os.system("gunzip '" + outdir + "/" + c_input + "/ff_trs_neg.gz'")
-#         #     os.system("gunzip '" + outdir + "/" + c_input + "/tr_trs_neg.gz'")
-#         #     tr2nc_mslp(outdir + "/" + c_input + "/ff_trs_neg")
-#         #     tr2nc_mslp(outdir + "/" + c_input + "/tr_trs_neg")
-#         #     print("mv outdat/ff_trs." + ext + ".nc " + outdir + "/" + c_input + "/.")
-
-            
-#     os.chdir(cwd)
-
-#     return
-
-# def track_era5_vor850(infile, outdirectory, infile2, NH=True, netcdf=True, ysplit=False):
-
-#     """
-#     Calculate 850 hPa vorticity from ERA5 horizontal wind velocity data
-#     and run TRACK.
-
-#     Parameters
-#     ----------
-
-#     input : string
-#         Path to .nc file containing combined ERA5 UV data
-
-#     outdirectory : string
-#         Path of directory to output tracks to
-
-#     NH : boolean, optional
-#         If true, tracks the Northern Hemisphere. If false, tracks Southern
-#         Hemisphere.
-
-#     netcdf : boolean, optional
-#         If true, converts TRACK output to netCDF format using TR2NC utility.
-        
-#     ysplit : boolean, default is false
-#         If true, splits the years into separate files for tracking.
-
-#     """
-#     # convert to full path the output track directory
-#     outdir = os.path.abspath(os.path.expanduser(outdirectory))
-    
-#     # check if U and V are in the same file, if not merge them
-#     if infile2 == 'none':
-#         input = infile
-#     else:
-#         outfile_uv = infile[:-3] + "_merged.nc"
-#         outfile_uv = outfile_uv.replace("_u_", "_uv_").replace("_u_", "_uv_")
-#         outfile_uv, tempdir = merge_uv_ERA5(infile, infile2, outfile_uv)
-#         input = os.path.join(tempdir, os.path.basename(outfile_uv))
-            
-#     print("input file for wind is: ", input)
-#     input_basename = os.path.basename(input)
-
-#     # Read data carachteristics (NOTE: test with cmip6_indat)
-#     if input_basename[-3:] == ".nc":
-#         data = Dataset(input, 'r')
-#     else:
-#         raise Exception("Invalid input file type. Please input a netCDF file.")
-    
-#     vars = [var for var in data.variables]
-#     nx = str(len(data.variables['longitude'][:]))
-#     ny = str(len(data.variables['latitude'][:]))
-
-#     if (vars[-1] != "v") or (vars[-2] != "u"):
-#         raise Exception("Invalid input variable type. Please input a UV file from ERA5.")
-
-    
-    
-    
-    
-#     print("Starting preprocessing.")
-#     print("Filling missing values.")
-    
-#     filled = input[:-3] + "_filled.nc"
-#     print("Filled file is: ", filled)
-#     if os.path.isfile(filled):
-#         print("Filled file already exists.")
-#     else:
-#         os.system("ncatted -a _FillValue,,d,, -a missing_value,,d,, " + input +
-#                 " " + filled)
-#         print("Filled missing values, if any.")
-
-#     # create link of data to TRACK indat directory
-#     print('Linking data to TRACK/indat')
-#     os.system("ln -fs '" + filled + "' " + str(Path.home()) + "/track-master/indat/" + input_basename)
-
-#     # change working directory
-#     cwd = os.getcwd()
-#     os.chdir(str(Path.home()) + "/track-master")
-
-#     years = cdo.showyear(input=filled)[0].split()
-#     print("Years: ", years)
-    
-#     if not ysplit:
-#         years = [years[-1]]
-    
-#     if NH == True:
-#         hemisphere = "NH"
-#     else:
-#         hemisphere = "SH"
-
-#     # do tracking for one year at a time
-#     for year in years:
-#         print("Running TRACK for year: " + year + "...")
-
-#         # select year from data
-#         if ysplit:
-#             print("Splitting: " + year)
-#             year_file = input_basename[:-3] + "_" + year + ".nc"
-#             cdo.selyear(year, input="indat/"+input_basename, output="indat/"+year_file)
-#             c_input = year + "_" + hemisphere + "_" + input_basename[:-3]
-#         else:
-#             year_file=input_basename
-#             c_input = hemisphere + "_" + input_basename[:-3]
-        
-#         # get number of timesteps and number of chunks for tracking
-#         data = cmip6_indat("indat/"+year_file)
-#         ntime = data.get_timesteps()
-#         nchunks = ceil(ntime/62)
-
-#         # calculate vorticity from UV
-#         vor850_temp_name = "vor850_" + c_input + ".dat"
-#         calc_vorticity("indat/"+year_file, vor850_temp_name, copy_file=False, cmip6=False)
-
-#         # extensions
-#         ext=c_input
-        
-#         # spectral filtering (vorticity)
-#         # GZ+:  Enforce vorticity tracking at T42 resolution
-#         # if int(ny) >= 96: # T63
-#         #     fname = "T63filt_" + year + ".dat"
-#         #     line_1 = "sed -e \"s/NX/" + nx + "/;s/NY/" + ny + \
-#         #                 "/;s/TRUNC/63/\" specfilt.in > spec.test"
-#         #     line_3 = "mv outdat/specfil.y" + year + "_band001 indat/" + fname
-#         #     # NH
-#         #     line_5 = "master -c=" + c_input + " -e=track.linux -d=now -i=" + \
-#         #                 fname + " -f=y" + year + \
-#         #                 " -j=RUN_AT.in -k=initial.T63_" + hemisphere + \
-#         #                 " -n=1,62," + str(nchunks) + " -o='" + outdir + \
-#         #                 "' -r=RUN_AT_ -s=RUNDATIN.VOR"
-#         # else: # T42
-#         # GZ-
-        
-#         fname = "T42filt_" + vor850_temp_name + ".dat"
-#         line_1 = "sed -e \"s/NX/" + nx + "/;s/NY/" + ny + \
-#             "/;s/TRUNC/42/\" specfilt.in > spec.test"
-#         line_3 = "mv outdat/specfil." + ext + "_band001 indat/" + fname
-#         # NH
-#         line_5 = "master -c=" + c_input + " -e=track.linux -d=now -i=" + \
-#             fname + " -f=" + ext + \
-#             " -j=RUN_AT.in -k=initial.T42_" + hemisphere + \
-#             " -n=1,62," + \
-#             str(nchunks) + " -o='" + outdir + \
-#             "' -r=RUN_AT_ -s=RUNDATIN.VOR"
-
-#         line_2 = "bin/track.linux -i " + vor850_temp_name + " -f " + ext + \
-#                     " < spec.test"
-#         line_4 = "rm outdat/specfil." + ext + "_band000 outdat/interp_th." + ext
-
-#         # setting environment variables
-#         os.environ["CC"] = "gcc"
-#         os.environ["FC"] = "gfortran"
-#         os.environ["ARFLAGS"] = ""
-#         os.environ["PATH"] += ":." 
-
-#         # executing the lines to run TRACK
-#         print("Spectral filtering...")
-
-#         os.system(line_1)
-#         os.system(line_2)
-#         os.system(line_3)
-
-#         print("Running TRACK...")
-#         os.system(line_5)
-
-#         print("Converting steps to dates")
-#         steps_to_dates(outdir + "/" + c_input, "indat/"+year_file)
-
-#         # move .nc output to outdir
-#         os.system("mv outdat/ff_trs." + ext + ".nc " + outdir + "/" + c_input + "/.")
-#         os.system("mv outdat/tr_trs." + ext + ".nc " + outdir + "/" + c_input + "/.")
-
-#         # if netcdf == True:
-#         #     print("Turning track output to netCDF...")
-#         #     # tr2nc - turn tracks into netCDF files
-#         #     os.system("gunzip '" + outdir + "'/" + c_input + "/ff_trs_*")
-#         #     os.system("gunzip '" + outdir + "'/" + c_input + "/tr_trs_*")
-#         #     tr2nc_vor(outdir + "/" + c_input + "/ff_trs_pos")
-#         #     tr2nc_vor(outdir + "/" + c_input + "/ff_trs_neg")
-#         #     tr2nc_vor(outdir + "/" + c_input + "/tr_trs_pos")
-#         #     tr2nc_vor(outdir + "/" + c_input + "/tr_trs_neg")
-
-#         # cleanup TRACK
-#         os.system("rm indat/"+year_file)
-#         os.system("rm indat/"+fname)
-#         os.system("rm indat/"+vor850_temp_name)
-#         os.system(line_4)
-#         os.system("rm outdat/initial.vor850_" + c_input)
-        
-#         # if input was merged, remove the merged and filled files
-#         if infile2 != 'none':
-#             os.system("rm " + outfile_uv)
-#         os.system("rm " + filled)
-
-
-#     os.chdir(cwd)
-#     return
 
 
 #
@@ -1741,3 +1418,36 @@ def subsample_timesteps(track_file, step, offset=0):
     return
     
     
+def radial_maps(file_nc,track_file):
+
+    cwd = os.getcwd()
+    file_nc_name=os.path.basename(file_nc) 
+
+    # read data charactheristics
+    data=data_indat(file_nc)
+    nx, ny = data.get_nx_ny()
+    nxp=str(int(nx)+1)
+
+    # prepare input file
+    inputfile_template=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/template_radial_map_test.in"
+    line1 = (
+        f"sed -e 's:NXP:{nxp}:' "
+        f"-e 's:NY:{ny}:' "
+        f"-e 's:file_map.nc:{file_nc_name}:' "
+        f"-e 's:ff_trs:{track_file}:' "
+        f"{inputfile_template} > indat/radial_map.in"
+    )
+    
+    # link file_nc into indat
+    os.system(f"ln -fs {file_nc} {str(Path.home())}/track-master/indat/")
+
+    os.chdir(str(Path.home()) + "/track-master")
+    print(line1)
+    os.system(line1)
+
+    # run track for radial map
+    os.system("bin/track.linux -f prova < indat/radial_map.in")
+
+    # run tcident
+
+    # clean 
