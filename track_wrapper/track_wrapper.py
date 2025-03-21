@@ -57,7 +57,7 @@ class data_indat(object):
         Reads the netCDF file and scans its variables.
 
         Parameters
-        ----------
+        ----------f
 
 
         filename : string
@@ -1345,7 +1345,7 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
     trackfilename=os.path.basename(trackfile)
 
     # manage output
-    trackfileout=f"{trackfile}.{fieldname}{str(radius)[0]}{operation}"
+    trackfileout=f"{trackfile}.{fieldname}{int(float(radius))}{operation}"
     os.system(f"mv outdat/ff_trs.{ext}_addfld {trackfileout}")
 
      # output track filename and directory
@@ -1418,23 +1418,32 @@ def subsample_timesteps(track_file, step, offset=0):
     return
     
     
-def radial_maps(file_nc,track_file):
+def radial_maps(file_nc,track_file,namefield,intensity=0):
+    # compute composite radial map for a given track file and field
 
     cwd = os.getcwd()
     file_nc_name=os.path.basename(file_nc) 
+    track_file_dir=os.path.dirname(track_file)
+    expm_dir=os.path.dirname(track_file_dir)
+
+    if intensity>0:
+        sed_filter_intensity=f" -e 's:filter_intensity:y 0 2 {intensity} 1.0e+15 n n:' " 
+    else:
+        sed_filter_intensity=" -e 's:filter_intensity:n:' "
 
     # read data charactheristics
     data=data_indat(file_nc)
     nx, ny = data.get_nx_ny()
     nxp=str(int(nx)+1)
 
-    # prepare input file
-    inputfile_template=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/template_radial_map_test.in"
+    # prepare input file for radial map
+    inputfile_template=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/template_radial_map.in"
     line1 = (
         f"sed -e 's:NXP:{nxp}:' "
         f"-e 's:NY:{ny}:' "
         f"-e 's:file_map.nc:{file_nc_name}:' "
         f"-e 's:ff_trs:{track_file}:' "
+        f"{sed_filter_intensity}"
         f"{inputfile_template} > indat/radial_map.in"
     )
     
@@ -1446,8 +1455,35 @@ def radial_maps(file_nc,track_file):
     os.system(line1)
 
     # run track for radial map
-    os.system("bin/track.linux -f prova < indat/radial_map.in")
+    ext='radial'
+    os.system(f"bin/track.linux -f {ext} < indat/radial_map.in")
+
+
+    # prepare input file for tcident
+    reg_file=f"{Path.home()}/track-master/outdat/ff_trs.{ext}_addfld_reg"
+    tcident_template=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/template_tcident_radialmaps.in"
+    track_file_reg=f"{Path.home()}/track-master/outdat/ff_trs.{ext}"
+    line2= (
+        f"-e 's:ff_trs.reg:{reg_file}:' "
+        f"-e 's:track_file:{track_file_reg}:' "
+        f"-e 's:namefield:{namefield}:' "
+        f"{tcident_template} > indat/tcident_radialmaps.in"
+    )
 
     # run tcident
+    os.system(f"sed {line2}")
 
+    # move output
+    print(expm_dir)
+    os.system(f"mkdir -p {expm_dir}/radial_maps")
+
+    os.chdir(f"{expm_dir}/radial_maps") 
+    os.system(f"{Path.home()}/track-master/utils/bin/tcident < {Path.home()}/track-master/indat/tcident_radialmaps.in")
+   
     # clean 
+    os.system(f"mv {reg_file} {expm_dir}/radial_maps/")
+    os.system(f"mv reg_avg.nc reg_avg_{namefield}_{intensity}.nc")
+    os.system(f"rm timout.dat dir_speed.dat frmin.dat frmax.dat frange.dat fdif.dat track.dat nums.nc nums.dat reg_avg.dat")
+    os.system(f"rm {Path.home()}/track-master/outdat/ff_trs.{ext}.nc")
+    os.system(f"rm {Path.home()}/track-master/outdat/ff_trs.{ext}")
+    os.system(f"rm {Path.home()}/track-master/outdat/initial.{ext}")
