@@ -1,6 +1,6 @@
 # pyTRACK-CMIP6: A Python Wrapper Library to Adapt TRACK for CMIP6 Input and Extratropical Cyclone Analysis
 
-[TRACK](http://www.nerc-essc.ac.uk/~kih/TRACK/Track.html) is a powerful storm tracking software package that automatically identifies and tracks storm features in model and observational data. pyTRACK-CMIP6 is intended to be a Python 3 wrapper for using TRACK on mean sea level pressure (MSLP) data and 850 hPa vorticity data, calculated from horizontal winds, from phase 6 of the Coupled Model Intercomparison Project (CMIP6). pyTRACK-CMIP6 also includes functionality to run TRACK on ERA5 reanalysis MSLP and vorticity data calculated from horizontal winds.
+[TRACK](https://gitlab.act.reading.ac.uk/track/track/-/tree/TRACK-1.5.2/utils?ref_type=tags) is a powerful storm tracking software package that automatically identifies and tracks storm features in model and observational data. pyTRACK-CMIP6 is intended to be a Python 3 wrapper for using TRACK on 850 hPa vorticity data calculated from horizontal winds and mean sea level pressure (MSLP) data, from phase 6 of the Coupled Model Intercomparison Project (CMIP6). To perform storm tracking on generic climate model output, pyTRACK-CMIP6 also includes functionality to format generic model output to CMIP6 conventions and produce storm statistics from the tracks.
 
 ## Installation Guide
 
@@ -8,10 +8,10 @@ Note: If you plan to use this module on JASMIN, please first look at the "Using 
 
 To begin, please clone this repository with the following command in the Linux command line. This repository does not need to exist in the home directory, but this is a necessary step because the input files stored in this repository are needed to configure and set up TRACK.
 ```
-git clone https://github.com/acse-hvs119/pyTRACK-CMIP6.git
+git clone https://github.com/zappag/pyTRACK-CMIP6.git -b dev_abel
 ```
 
-The pyTRACK-CMIP6 functionalities require a Linux system with standard setups of GCC, GFortran and NetCDF, as well as a working installation of TRACK. Additionally, please make sure csh is installed. To install TRACK, you will need to download it from its [homepage](http://www.nerc-essc.ac.uk/~kih/TRACK/Track.html). For permission to download, please contact the author of TRACK, Dr Kevin Hodges. Note that TRACK will soon be available via GitLabs. Due to somce path dependencies in TRACK, it is highly recommended to install TRACK in your home folder. Once you have downloaded the TRACK tarball, please place it in your home directory and untar. Then, to complete the installation process, the `linux_track_installation.sh` script included in this repository can be used in the following way, from the `pyTRACK-CMIP6` directory:
+The pyTRACK-CMIP6 functionalities require a Linux system with standard setups of GCC, GFortran and NetCDF, as well as a working installation of TRACK. Additionally, please make sure csh is installed. To install TRACK, you will need to download it from its [homepage](https://gitlab.act.reading.ac.uk/track/track/-/tree/TRACK-1.5.2/utils?ref_type=tags). For permission to download, please contact the author of TRACK, Dr Kevin Hodges. Due to path dependencies in TRACK, it is highly recommended to install TRACK in your home folder. Once you have downloaded the TRACK tarball, please place it in your home directory and untar. Then, to complete the installation process, the `linux_track_installation.sh` script included in this repository can be used in the following way, from the `pyTRACK-CMIP6` directory:
 ```
 sudo ./linux_track_installation.sh
 ```
@@ -31,15 +31,14 @@ Next, run this from the pyTRACK-CMIP6 directory in order to configure TRACK for 
 python setup_track.py
 ```
 
-Afterwards, if the pyTRACK-CMIP6 main wrapper functions are to be imported and run from any directory, please install the pyTRACK-CMIP6 module using pip by running the following:
+Afterwards, if the pyTRACK-CMIP6 main wrapper functions are to be imported and run from any directory, please install the pyTRACK-CMIP6 module using pip by running the following from within the pyTRACK-CMIP6 directory:
 ```
-pip install pyTRACK-CMIP6
+pip install -e .
 ```
-Note that this will not enable to setup functions to run from anywhere, since those are dependent on files that exist in this repository. However, if the previous steps have been followed, the setup functions are not needed.
 
 #### Modifying track wrapper functions
 
-If you wish to modify any of the track_wrapper functions or add your functions do not forgeto to install it through:
+If you wish to modify any of the track_wrapper functions or add your functions do not forget to install it through:
 
 pip install -e /path/to/pyTRACK
 
