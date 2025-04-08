@@ -9,7 +9,7 @@ import shutil
 
 cdo = Cdo()
 
-__all__ = ['track_uv', 'format_data']
+__all__ = ['track_uv', 'format_data', 'format_data_single']
 
 class cmip6_indat(object):
     """Class to obtain basic information about the CMIP6 input data."""
@@ -503,10 +503,33 @@ def tr2nc_vor(input, timestring, datetime, timedelta):
     return
 
 
+# Function to format a single file by changing variable names and adds units to match CMIP conventions.
+
+def format_data_single(data, outdir, uname='ua', vname='va', plev=None):
+    '''
+    data(file) : File containing u and v fields across (time, lat, lon) and at a single pressure level.
+    outdir(DirectoryPath) : Location to save the formatted file to
+    uname(String) : Name of the u-wind field in file
+    vname(String) : Name of the u-wind field in file
+    plev(value) : pressure level to slice out for tracking - leave blank if file only has one level
+    '''
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
+
+    if not os.path.isfile(data):
+        raise Exception(data+ ' not a file!')
+
+    dat=xr.open_dataset(data)
+    if plev!=None:
+        dat=dat.sel(plev=plev)
+    dat.lon.attrs["units"]="degrees_east"; dat.lat.attrs["units"]="degrees_north"
+    dat=dat[[uname, vname]].rename_vars({uname:'ua', vname:'va'})#.drop_vars(['plev'])
+    dat.to_netcdf(outdir+'/'+os.path.basename(data)[:-3]+'_CMIP.nc', unlimited_dims={'time'})
+
+
+# custom function to extract out uv data from generic climate model data -- dev_flag
+# changes variable names and adds units to match CMIP conventions
 def format_data(indir, outdir, create_seasonal=False):
-    
-    # custom function to extract out uv data from generic climate model data
-    # changes variable names and adds units to match CMIP conventions
 
     if not os.path.exists(outdir):
         os.makedirs(outdir)

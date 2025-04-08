@@ -154,6 +154,8 @@ def setup_files():
                 "/TRACK/indat") # RUNDATIN files
     os.system("cp track_wrapper/indat/calcvor_onelev.in " + str(Path.home()) +
                 "/TRACK/indat/.") # RUNDATIN files
+    os.system("cp track_wrapper/indat/gridT63.nc " + str(Path.home()) +
+                "/TRACK/indat") # gridT63 for stats
     os.system("cp track_wrapper/data/* " + str(Path.home()) +
                 "/TRACK/data") # initial and adapt.dat0, zone.dat0
     os.system("cp track_wrapper/tr2nc_new.tar " + str(Path.home()) +

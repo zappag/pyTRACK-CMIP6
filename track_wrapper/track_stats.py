@@ -10,14 +10,12 @@ cdo = Cdo()
 
 __all__ = ['track_stats']
 
-def track_stats(indir, outdir, season='JJA', extended=True, adaptive_smooth=True, cyclone=True):
+def track_stats(indir, outdir, season='JJA', adaptive_smooth=True, cyclone=True):
 
     if os.path.isdir(outdir)==False:
         os.system('mkdir '+outdir)
 
-    ## temporary - getting the files in manually
-
-    path='/gws/nopw/j04/csgap/abel/TRACK_curr/'+indir+'/'
+    path=indir
     filelist=glob.glob(path+'*')
 
     if season=='DJF':
@@ -29,7 +27,7 @@ def track_stats(indir, outdir, season='JJA', extended=True, adaptive_smooth=True
         end=[248, 368, 492]
         file_ext=['jun', 'jul', 'aug']
 
-    os.chdir('/home/users/as7424/TRACK')
+    os.chdir(str(Path.home()) + "/TRACK")
 
     for e in filelist[:]:
 
