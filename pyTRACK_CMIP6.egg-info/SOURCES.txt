@@ -10,5 +10,8 @@ pyTRACK_CMIP6.egg-info/.ipynb_checkpoints/SOURCES-checkpoint.txt
 pyTRACK_CMIP6.egg-info/.ipynb_checkpoints/dependency_links-checkpoint.txt
 pyTRACK_CMIP6.egg-info/.ipynb_checkpoints/top_level-checkpoint.txt
 track_wrapper/__init__.py
+track_wrapper/composite.py
+track_wrapper/main.py
+track_wrapper/track_generic.py
+track_wrapper/track_stats.py
 track_wrapper/track_wrapper.py
-track_wrapper/track_wrapper_generic.py
