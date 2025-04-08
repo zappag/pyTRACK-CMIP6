@@ -37,6 +37,14 @@ pip install pyTRACK-CMIP6
 ```
 Note that this will not enable to setup functions to run from anywhere, since those are dependent on files that exist in this repository. However, if the previous steps have been followed, the setup functions are not needed.
 
+#### Modifying track wrapper functions
+
+If you wish to modify any of the track_wrapper functions or add your functions do not forgeto to install it through:
+
+pip install -e /path/to/pyTRACK
+
+to update automatically pyTRACK after any modification to the code.
+
 
 ## User Instructions
 
@@ -79,6 +87,7 @@ with the arguments being the same as for the CMIP6 wrapper functions above. For 
 #### Other individual functions
 
 If you wish to use the individual functions in this module outside of the wrappers, please refer to the documentation included in the `html` folder in this repository about details and usage.
+
 
 #### TRACK Output
 

@@ -3,3 +3,6 @@ netCDF4
 cdo
 sphinx
 pytest
+matplotlib
+cartopy
+scipy
