@@ -12,31 +12,36 @@ R=6378*1000
 
 __all__ = ['run_composite']
 
-def run_composite(track_dir, data_dir, filetype='ff_trs_pos', hemisphere='NH'):
+def run_composite(track_dir, data_dir, cyclones=True, hemisphere='NH'):
 
+    if (cyclones==True and hemisphere=='NH') or (cyclones==False and hemisphere=='SH'):
+        filetype='ff_trs_pos'
+    else:
+        filetype='ff_trs_neg'
     ## get list of tracks
 
-    time_grp=[]
-    lat_grp=[]
-    lon_grp=[]
-    angle_grp=[]
-    v_sys=[]
-    u_sys=[]
-    int_grp=[]
-
-    fig = plt.figure(figsize=(12,5))
-        
-    ax = fig.add_subplot(111,projection=ccrs.PlateCarree(central_longitude=270))
-    ax.coastlines()
+    max_all=[]
+    max_arr=[]
+    max_loc=[]
+    len_arr=[]
+    vor_arr=[]
+    time_arr=[]
+    lon_arr=[]
+    lat_arr=[]
+    lat_gen=[]
+    lat_max=[]
+    lat_lys=[]
 
     filelist=glob.glob(track_dir+'/'+hemisphere+'*')
 
     for f in filelist[:]:
         tracks=xr.open_dataset(f+'/'+filetype+'.nc')
-        point_count=np.insert(np.cumsum(tracks['NUM_PTS'].values[:]),0,0)
 
-        for i in range(len(point_count)-1):
+        point_count=np.insert(np.cumsum(tracks['NUM_PTS'].values[:]),0,0)
         
+        for i in range(len(point_count)-1):
+        # for i in range(100,500):
+            
             start=point_count[i]; end=point_count[i+1]
             time_tr=tracks['time'].values[start:end]
             lat_tr=tracks['latitude'].values[start:end]
@@ -44,148 +49,75 @@ def run_composite(track_dir, data_dir, filetype='ff_trs_pos', hemisphere='NH'):
             int_tr=tracks['curvature_vorticity'].values[start:end]
             mx=(np.argmax(int_tr))
             mx_val=np.max(int_tr)
+            mid=str(time_tr[int(len(time_tr)/2)])[5:7]
+
+            if len(time_tr)>16 and np.all(abs(lat_tr)>30) and np.all(abs(lat_tr)<80):
+
+                max_all.append(mx_val)
+
+    thresh = np.quantile(max_all, [0, 1])
     
-            if mx_val>15e-05 and len(time_tr)>16:
-                int_grp.append(mx_val)
+    for f in filelist[:]:
+        tracks=xr.open_dataset(f+'/'+filetype+'.nc')
+
+        point_count=np.insert(np.cumsum(tracks['NUM_PTS'].values[:]),0,0)
+        
+        for i in range(len(point_count)-1):
+        # for i in range(100,500):
             
-                lon_v=R*np.radians(lon_tr[1:]-lon_tr[:-1])*np.cos(np.radians(lat_tr[:-1]))/(6*3600)
-                lat_v=R*np.radians(lat_tr[1:]-lat_tr[:-1])/(6*3600)
-                
-                angle=np.degrees(np.arctan2(lat_v, lon_v))
-                
-                angle=np.pad(angle, 1, mode='edge')[1:]
-                lon_v=np.pad(lon_v, 1, mode='edge')[1:]
-                lat_v=np.pad(lat_v, 1, mode='edge')[1:]
-                
-                time_grp.append(time_tr[mx])
-                lat_grp.append(lat_tr[mx])
-                lon_grp.append(lon_tr[mx])
-                angle_grp.append(angle[mx])
-                v_sys.append(lat_v[mx])
-                u_sys.append(lon_v[mx])
-    
-                if np.min(lon_tr[1:]-lon_tr[:-1])<-180:
-                    lon_tr=rewrap(lon_tr)
-    
-                plt.plot(lon_tr, lat_tr, transform=ccrs.PlateCarree(),color='black', linestyle='--', linewidth=0.7, zorder=0)
-                plt.scatter(lon_tr[mx], lat_tr[mx], marker='x', s=25, transform=ccrs.PlateCarree(), color='black',zorder=1)
-                plt.scatter(lon_tr[0], lat_tr[0], s=5, transform=ccrs.PlateCarree(), color='black',zorder=3)
-
-    ax.set_extent([-179, 179, -60, 90], crs=ccrs.PlateCarree())
-    plt.savefig('/home/users/as7424/curr/plot.png')
-
-
-    ## collect data for scalar fields
-
-    lons=np.linspace(0,360,360)
-    lats=np.linspace(90,75,40)
-
-    lon_list=[]
-    lat_list=[]
-    for i in lons:
-        for j in lats:
-            lon_list.append(i)
-            lat_list.append(j)
-        
-    lonref, latref= rotate_coord(0 ,0, lon_list, lat_list)
-    
-    sc_arr=scalar_composite(data_dir, time_grp, lat_grp, lon_grp, angle_grp)
-    
-    fig = plt.figure(figsize=(7,5))
-    plt.tricontourf(lonref, latref, np.mean(sc_arr[0],axis=0), cmap='Reds', levels=30)
-    plt.colorbar()
-    plt.axis('off')
-    plt.savefig('/home/users/as7424/curr/temp.png')
-
-    vmax=35
-    fig = plt.figure(figsize=(7,5))
-    plt.tricontourf(lonref, latref, np.mean(sc_arr[1],axis=0), cmap='RdBu_r', levels=30, vmin=-vmax, vmax=vmax)
-    plt.colorbar()
-    plt.axis('off')
-    plt.savefig('/home/users/as7424/curr/lat_low.png')
-
-    fig = plt.figure(figsize=(7,5))
-    plt.tricontourf(lonref, latref, np.mean(sc_arr[2],axis=0), cmap='RdBu_r', levels=30, vmin=-vmax, vmax=vmax)
-    plt.colorbar()
-    plt.axis('off')
-    plt.savefig('/home/users/as7424/curr/lat_mid.png')
-    
-    vec_arr=vector_composite(data_dir, time_grp, lat_grp, lon_grp, angle_grp, u_sys, v_sys)
-
-def scalar_composite(data_dir, time_grp, lat_grp, lon_grp, angle_grp, rotate=False):
-
-    lons=np.linspace(0,360,360)
-    lats=np.linspace(90,75,40)
-
-    lon_list=[]
-    lat_list=[]
-    for i in lons:
-        for j in lats:
-            lon_list.append(i)
-            lat_list.append(j)
-        
-    lonref, latref= rotate_coord(0 ,0, lon_list, lat_list)
-
-    arr1=[]
-    arr2=[]
-    arr3=[]
-    
-    for ind in range(len(time_grp)):
-        
-        time=get_date(time_grp[ind])
-    
-        ## locate file
-        os.chdir(data_dir)
-        part1=str(time)[:7]
-        part2=str(int(str(time)[5:7])-1)
-        part3=str(int(str(time)[:4])-1)+'-12'
-        if len(part2)==1:
-            part2=part1[:5]+'0'+part2
-        else:
-            part2=part1[:5]+part2
+            start=point_count[i]; end=point_count[i+1]
+            time_tr=tracks['time'].values[start:end]
+            lat_tr=tracks['latitude'].values[start:end]
+            lon_tr=tracks['longitude'].values[start:end]
+            int_tr=tracks['curvature_vorticity'].values[start:end]
+            mx=(np.argmax(int_tr))
+            mx_val=np.max(int_tr)
+            mid=str(time_tr[int(len(time_tr)/2)])[5:7]
             
-        filelist = glob.glob('*'+part1+'*')+glob.glob('*'+part2+'*')+glob.glob('*'+part3+'*')
+            if mx_val>thresh[0] and mx_val<thresh[1] and len(time_tr)>16 and np.all(abs(lat_tr)>30) and np.all(abs(lat_tr)<80):   
+
+                lat_gen.append(lat_tr[0])
+                lat_lys.append(lat_tr[-1])
+                lat_max.append(lat_tr[mx])
+                max_arr.append(mx_val)
+                len_arr.append(len(time_tr))
+                    
+                vor_arr.append(int_tr)
+                time_arr.append(time_tr)
+                max_loc.append(mx)
+                lon_arr.append(lon_tr)
+                lat_arr.append(lat_tr)
     
-        for e in filelist:
-            data=xr.open_dataset(e)
-            if time in data['time']:
-                break
+    grp_arr=[]
+    grp_time=[]
+    grp_lat=[]
+    grp_lon=[]
+    time_list=range(-10,11)
         
-        data_temp=data.sel({'time':time})
+    for e in range(len(vor_arr[:])):
+        arr_temp=[]
+        time_temp=[]
+        lat_temp=[]
+        lon_temp=[]
         
-        lonr_list=[]
-        lon_list=[]
-        lat_list=[]
-        for i in lons:
-            for j in lats:
-                lon_list.append(i)
-                lonr_list.append(i+angle_grp[ind])
-                lat_list.append(j)
+        for i in time_list:
+            if max_loc[e]+i>0 and max_loc[e]+i<len(vor_arr[e]):
+                arr_temp.append(vor_arr[e][max_loc[e]+i]*1e5)
+                time_temp.append(time_arr[e][max_loc[e]+i])
+                lat_temp.append(lat_arr[e][max_loc[e]+i])
+                lon_temp.append(lon_arr[e][max_loc[e]+i])
+            else:
+                arr_temp.append(np.nan)
+                time_temp.append(np.nan)
+                lat_temp.append(np.nan)
+                lon_temp.append(np.nan)
 
-        if rotate:
-            rlonr,rlatr = rotate_coord(lon_grp[ind],lat_grp[ind], lonr_list, lat_list)
-        else:
-            rlonr,rlatr = rotate_coord(lon_grp[ind],lat_grp[ind], lon_list, lat_list)
-    
-        x = xr.DataArray(rlonr, dims="points")
-        y = xr.DataArray(rlatr, dims="points")
+        # plt.plot(np.array(time_list)*6, arr_temp, color="k", alpha=0.05)
+        grp_arr.append(arr_temp)
+        grp_time.append(time_temp)
+        grp_lat.append(lat_temp)
+        grp_lon.append(lon_temp)
 
-        arr1.append(pad_data(data_temp['T']).sel({'plev':95000}).interp(lat=y, lon=x, method='linear').values[:])
-        arr2.append(pad_data(data_temp['DTCOND']).sel({'plev':slice(94000,110000)}).interp(lat=y, lon=x, method='linear').mean(dim='plev').values[:]*86400)
-        arr3.append(pad_data(data_temp['DTCOND']).sel({'plev':slice(50000,87000)}).interp(lat=y, lon=x, method='linear').mean(dim='plev').values[:]*86400)
-
-        # print(data_temp['DTCOND'].plev)
-        # print((pad_data(data_temp['DTCOND']).interp(lat=y, lon=x, method='linear')).mean('points')*86400)
-        fig = plt.figure(figsize=(7,5))
-        plt.plot((pad_data(data_temp['DTCOND']).interp(lat=y, lon=x, method='linear')).mean('points')*86400, data_temp['DTCOND'].plev)
-        plt.gca().invert_yaxis()
-        plt.xlabel('K/day')
-        plt.xlabel('hPa')
-        plt.savefig('/home/users/as7424/curr/'+str(ind)+'.png')
-    
-    return [arr1, arr2, arr3]
-
-def vector_composite(data_dir, time_grp, lat_grp, lon_grp, angle_grp, u_sys, v_sys, rotate=False):
 
     lons=np.linspace(0,360,36)
     lats=np.linspace(90,75,10)
@@ -196,69 +128,127 @@ def vector_composite(data_dir, time_grp, lat_grp, lon_grp, angle_grp, u_sys, v_s
         for j in lats:
             lon_list.append(i)
             lat_list.append(j)
-        
+
     lonref, latref= rotate_coord(0 ,0, lon_list, lat_list)
 
-    arrx1=[]; arry1=[]
+    lat_grp=[]
+    u_grp=[]
+    v_grp=[]
 
-    for ind in range(len(time_grp)):
-        
-        time=get_date(time_grp[ind])
-    
-        ## locate file
-        os.chdir(data_dir)
-        part1=str(time)[:7]
-        part2=str(int(str(time)[5:7])-1)
-        part3=str(int(str(time)[:4])-1)+'-12'
-        if len(part2)==1:
-            part2=part1[:5]+'0'+part2
+    for e in range(len(grp_time)):
+        # print(e)
+        temp=[]
+        tempu=[]
+        tempv=[]
+        for i in range(len(grp_time[e])):
+            if i in [2, 6, 10, 14, 18]:
+                if ~np.isnan(grp_time[e][i]):
+                    temp.append(latent_prof(grp_time[e][i], grp_lon[e][i], grp_lat[e][i])[0])
+                    tempu.append(latent_prof(grp_time[e][i], grp_lon[e][i], grp_lat[e][i])[1])
+                    tempv.append(latent_prof(grp_time[e][i], grp_lon[e][i], grp_lat[e][i])[2])
+                else:
+                    temp.append(np.nan);tempu.append(np.nan);tempv.append(np.nan) 
+        lat_grp.append(temp)
+        u_grp.append(tempu)
+        v_grp.append(tempv)
+
+    time_list=[-48, -24, 0, 24, 48]
+    lat_mean=[]
+    u_mean=[]
+    v_mean=[]
+    for e in range(len(time_list)):
+        temp_arr=[]
+        tempu_arr=[]
+        tempv_arr=[]
+        for i in range(len(lat_grp)):
+            if len(np.shape(lat_grp[i][e])):
+                temp_arr.append(lat_grp[i][e])
+                tempu_arr.append(u_grp[i][e])
+                tempv_arr.append(v_grp[i][e])
+
+        lat_mean.append(np.mean(temp_arr,axis=0))
+        u_mean.append(np.mean(tempu_arr,axis=0))
+        v_mean.append(np.mean(tempv_arr,axis=0))
+
+
+    lat_mean=xr.DataArray(lat_mean,
+                    dims=['time', 'points'])
+    u_mean=xr.DataArray(u_mean,
+                    dims=['time', 'points'])
+    v_mean=xr.DataArray(v_mean,
+                    dims=['time', 'points'])
+
+    time_list=[-48, -24, 0, 24, 48]
+
+    fig, axs = plt.subplots(2, 2)
+    fig.set_size_inches(8, 6)
+
+    for i, ax in enumerate(axs.flat):
+
+        if i==1:
+            im=ax.tricontourf(lonref, latref, lat_mean[i], levels=60, cmap='RdBu', vmax=0.5, vmin=-0.5)
+            ax.quiver(lonref, latref, u_mean[i], v_mean[i])
         else:
-            part2=part1[:5]+part2
-            
-        filelist = glob.glob('*'+part1+'*')+glob.glob('*'+part2+'*')+glob.glob('*'+part3+'*')
+            ax.tricontourf(lonref, latref, lat_mean[i], levels=60,cmap='RdBu', vmax=0.5, vmin=-0.5)
+            ax.quiver(lonref, latref, u_mean[i], v_mean[i])
+        
+        ax.set_title('t = '+ str(time_list[i])+'h')
+        # plt.colorbar()
+        ax.axis('off')
+
+    cbar=fig.colorbar(im, ax=axs.ravel().tolist())
+
+
+def get_date(time):
+
+    time_str=str(time)
+    return (cftime.DatetimeNoLeap(int(time_str[2:4]), int(time_str[5:7]), int(time_str[8:10]), int(time_str[11:13]),
+                                int(time_str[14:16]), int(time_str[17:19]), has_year_zero=True))
+
+def latent_prof(t, ln_ctr, lt_ctr):
+
+    time=get_date(t)
+
+    ## locate file
+    os.chdir('/home/requiem/pyTRACK-CMIP6/examples')
+
+    data=xr.open_dataset('uv_test.nc')
+
+
+    data_temp=data.sel({'time':time})
     
-        for e in filelist:
-            data=xr.open_dataset(e)
-            if time in data['time']:
-                break
-        
-        data_temp=data.sel({'time':time})
-        
-        lonr_list=[]
-        lon_list=[]
-        lat_list=[]
-        for i in lons:
-            for j in lats:
-                lon_list.append(i)
-                lonr_list.append(i+angle_grp[ind])
-                lat_list.append(j)
+    data_temp = data_temp.pad(lon=200, mode='wrap')
 
-        if rotate:
-            rlonr,rlatr = rotate_coord(lon_grp[ind],lat_grp[ind], lonr_list, lat_list)
-        else:
-            rlonr,rlatr = rotate_coord(lon_grp[ind],lat_grp[ind], lon_list, lat_list)
     
-        x = xr.DataArray(rlonr, dims="points")
-        y = xr.DataArray(rlatr, dims="points")
+    data_temp['lon'] = np.linspace(-250, 608.75, 688)
 
-        ui=pad_data(data_temp['U']).sel({'plev':95000}).interp(lat=y, lon=x, method='linear')-u_sys[ind]
-        vi=pad_data(data_temp['V']).sel({'plev':95000}).interp(lat=y, lon=x, method='linear')-v_sys[ind]
-        angi=-angle_grp[ind]
-        u_rot=ui*np.cos(np.radians(angi))-vi*np.sin(np.radians(angi))
-        v_rot=ui*np.sin(np.radians(angi))+vi*np.cos(np.radians(angi))
-        
-        if rotate:
-            arrx1.append(u_rot); arry1.append(v_rot)
-        else:
-            arrx1.append(ui); arry1.append(vi)
+    lons=np.linspace(0,360,36)
+    lats=np.linspace(90,75,10)
+    
+    lon_list=[]
+    lat_list=[]
+    for ln in lons:
+        for lt in lats:
+            lon_list.append(ln)
+            lat_list.append(lt)
+    
+    rlonr,rlatr = rotate_coord(ln_ctr,lt_ctr, lon_list, lat_list)
 
-        # fig = plt.figure(figsize=(7,5))
-        # plt.quiver(lonref, latref, arrx1[ind], arry1[ind])
-        # plt.axis('off')
-        # plt.savefig('/home/users/as7424/curr/'+str(ind)+'.png')
-        
-    return [arrx1, arry1]
-        
+    x = xr.DataArray(rlonr, dims="points")
+    y = xr.DataArray(rlatr, dims="points")
+    
+    data_slice=data_temp['OMEGA'].sel({'plev':slice(85000, 85000)}).interp(lat=y, lon=x, method='linear').mean(dim='plev')
+    u_slice=data_temp['U'].sel({'plev':slice(85000, 85000)}).interp(lat=y, lon=x, method='linear').mean(dim='plev')
+    v_slice=data_temp['V'].sel({'plev':slice(85000, 85000)}).interp(lat=y, lon=x, method='linear').mean(dim='plev')
+    # data_slice=data_temp.sel({'plev':85000}).interp(lat=y, lon=x, method='linear')
+    
+    # plt.quiver(lonref, latref, data_slice['U'], data_slice['V'])
+    # plt.tricontourf(lonref, latref, data_slice, levels=60, cmap='Reds')
+    # plt.colorbar()
+    # plt.show()
+    
+    return [data_slice, u_slice, v_slice]
+
 def rotate_coord(lon_center, lat_center, lon, lat, direction="r2n"):
 
     # lon_center: lon of cyclone center

@@ -5,10 +5,27 @@ from pathlib import Path
 from math import ceil
 import subprocess
 import glob
+import xarray as xr
 
 cdo = Cdo()
 
-__all__ = ['track_stats']
+__all__ = ['track_stats', 'track_stats_combined']
+
+def track_stats_combined(file, outdir):
+
+    if os.path.isdir(outdir)==False:
+        os.system('mkdir '+outdir)
+
+    os.chdir(str(Path.home()) + "/TRACK")
+            
+    os.system("sed -e \"s+FILE_NAME+" + str(file) + "+\" STATS_template_combined.in > STATS_mod.in")
+
+    os.system("bin/track.linux < STATS_mod.in")
+
+    stat_filename='stats_combined.nc'
+            
+    os.system("mv outdat/stat_trs_scl.linux_1.nc" +  " " + outdir+"/"+stat_filename)
+
 
 def track_stats(indir, outdir, season='JJA', adaptive_smooth=True, cyclone=True):
 

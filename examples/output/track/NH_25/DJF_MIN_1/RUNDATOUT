@@ -1,0 +1,603 @@
+***INFORMATION***, data file:-                              
+                   /home/requiem//TRACK/indat/T42filt_vor850y25.dat.dat                                       
+                   exists and will be opened for data input.
+
+do you want to load a country map, 'y' or 'n'
+do you want to use an existing initialization, '0' for no, '1' for yes
+Which initialization file is required
+
+File /home/requiem/TRACK/data/initial.T42_NH 
+ opened for 'r'
+
+
+File /home/requiem//TRACK/outdat/initial.y25 
+ opened for 'w'
+
+what format is the data
+Input '0' for UNIX binary format       
+Input '1' for standard ASCII format.   
+Input '2' for UTF format.              
+Input '3' for Met. Office PP format.   
+Input '4' for NETCDF.                  
+
+
+File /home/requiem//TRACK/indat/T42filt_vor850y25.dat.dat 
+ opened for 'r'
+
+Are frames seperated by a newline character, 'y' or 'n'?
+the current grid dimensions are 128 * 64 
+
+do you want to translate the grid 'y' or 'n'?
+
+****WARNING****, grid is not periodic.
+
+****WARNING****, grid is not uniform in the Y direction.
+
+The current grid is global but not periodic, do you
+want to make the grid periodic, 'y' or 'n'.        
+This is required for tracking on a global domain,  
+but is not required for spectral filtering.        
+
+****WARNING*****, translating grid by 0.000000
+
+ the NEW grid dimensions are 129 * 64
+
+what distance norm is required, input 'e' for euclidean,
+input 'g' for geodesic norm (if working on a sphere)
+***WARNING***,if the data is defined on a lat-long grid,       
+              a Plate Caree projection is used by default. 
+
+Is a different projection required, 'y' or 'n'
+
+Use this if data are already on a projection different from Plate Caree.
+
+what kind of projection would you like,                
+Cylindrical            input '0', Mercator etc.        
+Azimuthal              input '1', Stereographic etc    
+Conic                  input '2', Lambert etc          
+Rotated Cylindrical    input '3', Mercator etc         
+
+
+***Cylindrical Projection***
+Current world projection is Plate Caree
+
+
+***Cylindrical Projection***
+Current world projection is Plate Caree
+
+Is data already on an azimuthal grid, '0' for no or '1' for yes.
+
+are both hemispheres required or just one,
+ 'b' (for both) or 's' (for single).      
+
+which azimuthal projection is required, 
+ available projections are:             
+
+Orthographic    input '1'               
+Stereographic   input '2'               
+Gnomnic         input '3'               
+Lambert EA      input '4'               
+Azimuthal ED    input '5'               
+
+what is the origin for the 1st projection, input a (lat, long) pair.
+
+input the regions of the hemisphere required, in grid points 
+xng1, xng2 (xng1 < xng2), ylt1, ylt2 (ylt1 < ylt2).          
+The current region is 129 (X) by 64 (Y)
+
+1st hemisphere
+****INFORMATION****, chosen search area is inconsistent with data 
+                      hierachy, but will be padded out to continue
+
+ ****INFORMATION****, chosen search area is consistent with data hierachy
+
+Define number of points in X and Y or the grid spacing, '0' for number, '1' for spacing.
+
+this region has an extent of 3.903756 starting at -1.951878 (X), and                    
+                             3.903756 starting at -1.951878 (Y) in the projected space, 
+how many new grid points are required in the X-direction > 1 and the       
+Y-direction > 1
+
+
+***Azimuthal Projection***
+Current world projection is Stereographic
+
+do you want to combine existing sets of track data and display them,    
+or display exsisting sets of combined tracks,                           
+and/or perform statistical analysis and display,                        
+or compute time series analyses, e.g. mean, varience,                   
+filtered varience, filtered fields, or                                  
+combine weighted statistics from time series analysis,                  
+or perform spatial spectral filtering of fields,                        
+or convert data to binary format,                                       
+or extract fields from a file at a chosen sampling,                     
+or compute vorticity from wind fields,                                  
+or interpolate to a new grid.                                           
+y or n.                                                                 
+
+do you want to use an existing set of object and feature point
+data, y or n
+Do you want to compute the tendency of the current data, 'y' or 'n'?
+
+
+**** Performing pass 1 through data ****
+
+****INFORMATION****, chosen search area is inconsistent with data 
+                      hierachy, but will be padded out to continue
+
+ do you want to scale the field 'y' or 'n'
+input scaling
+do you want any offset subtraction from the data 'y' or 'n'?
+input the required threshold 
+***INFORMATION***, you are going to interpolate/smooth the
+                   field data onto a new grid, probably   
+                   associated with a new projection.      
+
+what kind of interpolation/smoothing is required?             
+
+input '0' to use smoopy (rect. mesh, no spherical continuity).
+          Mostely used for whole field or reduced field surface fit.
+input '1' to use sphery (rect. mesh, spherical continuity).   
+          Used exclusively for whole sphere fitting.      
+
+Do you want to add another field onto the object and feature point data,     
+for example, planetary waves that have been removed by filtering, 'y' or 'n'.
+
+The total number of levels for the data hierarchy is = 9
+
+do you want MAX (input '1') or MIN (input '0') thresholding
+
+will field values be required to be returned to original values
+the available number of frames is = 40
+
+which frame do you wish to start from
+
+what frame interval do you require
+
+what frame do you wish to terminate on
+
+what type of connectivity search is required 
+for vertex and edge connectivity input v (not V) 
+for edge connectivity only input e (not E) 
+what is the lower limiting size of objects, 
+input as a number of points!
+what kind of feature points are required 
+   Input a '0' for no feature points, threshold display only 
+   Input a '3' for local max's
+   Input a '4' for a connectivity search of local max's 
+   Input a '7' for surface fitting of region of interest and local optimization  
+   Input a '8' for surface fitting to objects and local optimization             
+               and the determination of shape parameters.                      
+
+ # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #       
+
+   ***WARNING***, last two options must have surface fitting and/or              
+                  local optimization libraries linked,                           
+                  this is the users responsibility.                              
+
+ # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #           
+
+   Input a '9' for the distance transform method.                                
+               (useful for objects without max. or min.).                        
+
+do you want to compute the anisotropy, orientation and area, 'y' or 'n'?
+
+what kind of interpolation/smoothing is required?             
+
+***INFORMATION***, use option '0' if working on a projection  
+                   other than cylindrical lat-long.         
+
+input '0' to use smoopy (rect. mesh, no spherical continuity).
+          Mostely used for whole field or reduced field surface fit.
+input '1' to use sphery (rect. mesh, spherical continuity).   
+          Used exclusively for whole sphere fitting.      
+
+Do you want to filter the object feature points for un-physical values? 'y' or 'n'
+
+Do you want to filter the object feature points, to retain the
+point with the largest value (depending on feature detection  
+scheme), 'y' or 'n'
+
+Do you want to filter the object feature points for points too close together, 'y' or 'n'.
+
+do you want time average subtraction from the data
+or time average thresholding                      
+input 'y' (not 'Y') for yes and                   
+input 'n' (not 'N') for no.                       
+
+FRAME      1
+
+What smoothing factor do you wish to use with SPHERY
+    s = 0  interpolating B-spline surface 
+    s > 0  least squares B-spline surface   
+////////////////////////////////////////////////////////////////
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+***INFORMATION***, performing setup for surface fitting on a   
+                   sphere using bi-cubic splines. Continuity   
+                   properties at the poles are specified by    
+                   the user by setting options (See sphery.f). 
+
+IIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIIII
+
+Do you you want to specify continuity properties at the poles 'y' or 'n'
+
+***INFORMATION***, for best results with the local optimization
+                   scheme choose C1 continuity at the poles  
+
+What continuity is required at the poles, for C1 input '1'
+otherwise no continuity is assumed
+
+surfit.c ier = -1 residual = 0.000000e+00
+****INFORMATION****, data (no threshold) will be written to new file on current projection.
+
+
+File /home/requiem//TRACK/outdat/interp_th.y25 
+ opened for 'w'
+
+When finding grid local maxima do you want to exclude   
+boundary maxima, e.g.. maxima adjacent to threshold     
+boundary or maxima adjacent to a land boundary for ocean
+problems?                                               
+Input '1' for exlusion, '0' otherwize.                  
+
+What smoothing factor do you wish to use with SMOOPY
+    s = 0  interpolating B-spline surface 
+    s > 0  least squares B-spline surface   
+surfit.c ier = -1 residual = 1.434808e-27
+do you want constrained optimization, 'y' or 'n'
+***IMPORTANT***, see the file 'data/constraints.dat' for restrictions
+do you want to use the default constraints 
+or the object extent constraints, 'd' or 'o'.   
+***INFORMATION***, using constarint file /home/requiem//TRACK/data/constraints.dat.reg
+
+
+File /home/requiem//TRACK/data/constraints.dat.reg 
+ opened for 'r'
+
+
+File /home/requiem//TRACK/outdat/objout.y25 
+ opened for 'w'
+
+Do you want object data written to file as well as feature data, 'y' or 'n',
+this include boundary data if computed.                                     
+
+do you want the first chosen frame plotted, answer y or n
+ do you want any other user chosen frames plotted?
+input the multiplication factor of the frame interval you require
+input a '0' if no further plotting is required
+FRAME      2
+
+Processing frame 2 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.492087e-27
+FRAME      3
+
+Processing frame 3 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.575143e-27
+FRAME      4
+
+Processing frame 4 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.657326e-27
+FRAME      5
+
+Processing frame 5 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.739391e-27
+FRAME      6
+
+Processing frame 6 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.645073e-27
+FRAME      7
+
+Processing frame 7 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.713747e-27
+FRAME      8
+
+Processing frame 8 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.651858e-27
+FRAME      9
+
+Processing frame 9 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.640470e-27
+FRAME     10
+
+Processing frame 10 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.623353e-27
+FRAME     11
+
+Processing frame 11 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.570605e-27
+FRAME     12
+
+Processing frame 12 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.631827e-27
+FRAME     13
+
+Processing frame 13 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.778776e-27
+FRAME     14
+
+Processing frame 14 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.834881e-27
+FRAME     15
+
+Processing frame 15 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.937688e-27
+FRAME     16
+
+Processing frame 16 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.943039e-27
+FRAME     17
+
+Processing frame 17 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.966121e-27
+FRAME     18
+
+Processing frame 18 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.937386e-27
+FRAME     19
+
+Processing frame 19 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.885639e-27
+FRAME     20
+
+Processing frame 20 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.912253e-27
+FRAME     21
+
+Processing frame 21 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.901907e-27
+FRAME     22
+
+Processing frame 22 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.883351e-27
+FRAME     23
+
+Processing frame 23 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.830739e-27
+FRAME     24
+
+Processing frame 24 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.876457e-27
+FRAME     25
+
+Processing frame 25 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.722041e-27
+FRAME     26
+
+Processing frame 26 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.576467e-27
+FRAME     27
+
+Processing frame 27 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.500629e-27
+FRAME     28
+
+Processing frame 28 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.426903e-27
+FRAME     29
+
+Processing frame 29 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.409408e-27
+FRAME     30
+
+Processing frame 30 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.402183e-27
+FRAME     31
+
+Processing frame 31 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.464370e-27
+FRAME     32
+
+Processing frame 32 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.454929e-27
+FRAME     33
+
+Processing frame 33 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.428140e-27
+FRAME     34
+
+Processing frame 34 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.448467e-27
+FRAME     35
+
+Processing frame 35 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.434569e-27
+FRAME     36
+
+Processing frame 36 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.506450e-27
+FRAME     37
+
+Processing frame 37 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.527874e-27
+FRAME     38
+
+Processing frame 38 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.504878e-27
+FRAME     39
+
+Processing frame 39 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.491259e-27
+FRAME     40
+
+Processing frame 40 
+surfit.c ier = -1 residual = 0.000000e+00
+surfit.c ier = -1 residual = 1.446450e-27
+Do you want to rotate feature locations to geographical locations 
+to account for data relative to a rotated pole, 'y' or 'n'        
+
+do you want to load an existing file of track data, y or n
+what input parameters are required for the modified
+greedy exchange algorithm
+
+input the weights such that w1+w2=1 and w1, w2 < 1
+the current norm is GEODESIC 
+
+There maybe missing frames do you want the tracking to be aware of them, 'y' or 'n'. 
+Note this assumes the missing frames have been detected during the identification.   
+
+Do you want regional upper bound displacements, 'y' or 'n'
+
+
+File /home/requiem//TRACK/data/zone.dat0 
+ opened for 'r'
+
+****INFORMATION****, reading regional dmax values from file:
+                     /home/requiem//TRACK/data/zone.dat0
+
+Do you want adaptive tracking, 'y' or 'n'
+
+
+File /home/requiem//TRACK/data/adapt.dat0 
+ opened for 'r'
+
+****INFORMATION****, reading adaptive phimax values from file:
+                     /home/requiem//TRACK/data/adapt.dat0
+
+input the phantom point parameters dmax and phimax, 
+
+----------------------------------------------------
+dmax is the max. upperbound displacement,           
+
+dmax is the euclidean norm for non-spherical space, 
+
+dmax is the angular seperation (in degrees)         
+     on a great circle for the geodeisic norm       
+
+phimax is the penalty value of the cost function for
+a phantom point.                                    
+Value of dmax should be >= ZONEMAX if variable      
+upper bound dispalcements are being used.           
+----------------------------------------------------
+
+File /home/requiem//TRACK/outdat/objout.new.y25 
+ opened for 'w'
+
+
+File /home/requiem//TRACK/outdat/idump.y25 
+ opened for 'w'
+
+do you want the initial track data plotted 
+type y(not Y) or n(not N)!
+do you want a different initialization or abort before minimization, 'y' or 'n' or 'a' for abort 
+1 
+***INFORMATION***, forward pass with track filter/checking.
+
+****WARNING****, possible error, both feature points are  
+                 phantom for upper bound dmax calculation.
+
+forward iteration 1 completed, cost function= 577.903429
+forward iteration 2 completed, cost function= 573.191817
+forward iteration 3 completed, cost function= 571.176939
+forward iteration 4 completed, cost function= 570.196839
+forward iteration 5 completed, cost function= 570.196839
+***INFORMATION***, backward pass with track filter/checking.
+
+backward iteration 1 completed, cost function= 568.844606
+backward iteration 2 completed, cost function= 567.470513
+backward iteration 3 completed, cost function= 567.499355
+backward iteration 4 completed, cost function= 568.413196
+backward iteration 5 completed, cost function= 568.413196
+2 
+***INFORMATION***, forward pass with track filter/checking.
+
+forward iteration 1 completed, cost function= 565.263374
+forward iteration 2 completed, cost function= 563.006611
+forward iteration 3 completed, cost function= 563.391515
+forward iteration 4 completed, cost function= 564.920621
+forward iteration 5 completed, cost function= 564.920621
+***INFORMATION***, backward pass with track filter/checking.
+
+backward iteration 1 completed, cost function= 567.603585
+backward iteration 2 completed, cost function= 563.919789
+backward iteration 3 completed, cost function= 565.755590
+backward iteration 4 completed, cost function= 566.669431
+backward iteration 5 completed, cost function= 566.669431
+3 
+***INFORMATION***, forward pass with track filter/checking.
+
+forward iteration 1 completed, cost function= 563.756235
+forward iteration 2 completed, cost function= 561.788066
+forward iteration 3 completed, cost function= 562.172970
+forward iteration 4 completed, cost function= 563.702076
+forward iteration 5 completed, cost function= 563.702076
+Do you want a missing frame search, 'y' or 'n'
+Do you want to apply zonal upper bound displacements, 
+and/or adaptive track smoothness, 'y' or 'n'?         
+
+There maybe missing frames do you want the tracking to be aware of them, 'y' or 'n'. 
+Note this assumes the missing frames have been detected during the identification.   
+
+Do you want regional upper bound displacements, 'y' or 'n'
+
+
+File /home/requiem//TRACK/data/zone.dat0 
+ opened for 'r'
+
+****INFORMATION****, reading regional dmax values from file:
+                     /home/requiem//TRACK/data/zone.dat0
+
+Do you want adaptive tracking? 'y' or 'n'
+
+
+File /home/requiem//TRACK/data/adapt.dat0 
+ opened for 'r'
+
+****INFORMATION****, reading adaptive phimax values from file:
+                     /home/requiem//TRACK/data/adapt.dat0
+
+***INFORMATION***, forward pass with track filter/checking.
+
+***INFORMATION***, backward pass with track filter/checking.
+
+the final value of the cost function is 566.678669 
+
+File /home/requiem//TRACK/outdat/tdump.y25 
+ opened for 'w'
+
+do you want any plots of the tracks
+input the min. number of points in a track for plotting
+input '0' for no further ploting
+what track do you want plotted, input '0' for none
+do you want to repeat the calculation with a different parametization 
+using the existing tracks, calculation, y or n. Note, a smaller dmax  
+should not be chosen unless re-initialization occurs.                 
+

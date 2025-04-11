@@ -78,5 +78,9 @@ class Case(object):
         track_uv(self.outdir+'/data/'+os.path.basename(self.data_dir)[:-3]+'_CMIP.nc', self.outdir+'/track')
 
     def stats(self):
-        print('Running stats and outputting to ' + self.outdir+'/stats')
-        track_stats(self.outdir+'/track/', self.outdir+'/stats')
+        print('Running combined stats and outputting to ' + self.outdir+'/stats')
+        track_stats_combined(self.outdir+'/track/NH_25/ff_trs_pos', self.outdir+'/stats')
+
+    def composite(self):
+        print('Running cyclone composite')
+        run_composite(self.outdir+'/track', self.outdir+'/stats')
