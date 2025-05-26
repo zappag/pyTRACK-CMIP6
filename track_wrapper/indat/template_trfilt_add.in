@@ -1,0 +1,39 @@
+indat/gridT42.utf
+n
+0
+2
+0.001
+n
+y
+g
+n
+1
+129
+1
+64
+y
+1
+y
+y
+tr_trs
+s
+1           # minimum lifetime in time steps
+100000      # maximum lifetime in time steps
+y           # filter by distance
+10.0        # minimum travel distance in degrees
+s           # type of distance, 's' from start to end, 't' cumulative distance
+y           # filter by strength
+1           # additional field to use, '0' for default
+0           # use tendency or growth as intensity, '0' is actual intensity
+1           # sampling rate
+2           # type of intensity filtering, '2' is maximum filtering
+25.0 10000  # intensity range
+n           # check for missing value on location, if no location information this is not required
+n
+n
+n
+a
+n
+n
+n
+0

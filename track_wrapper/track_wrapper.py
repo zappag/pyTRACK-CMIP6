@@ -6,13 +6,15 @@ from pathlib import Path
 from math import ceil
 import subprocess
 import random
+import xarray as xr
+import numpy as np
 
 cdo = Cdo()
 
 __all__ = ['cmip6_indat', 'regrid_cmip6', 'setup_files', 'calc_vorticity',
            'track_mslp', 'track_uv_vor850', 'setup_tr2nc',
            'tr2nc_mslp', 'tr2nc_vor','stats','steps_to_dates',
-           'add_mean_field', 'subsample_timesteps', 'radial_maps']
+           'add_mean_field', 'subsample_timesteps', 'radial_maps','radial_maps_2']
 
 class cmip6_indat(object):
     """Class to obtain basic information about the CMIP6 input data."""
@@ -1059,6 +1061,68 @@ file_to_find = 'example.txt'
 result = find_directories_with_file(root_directory, file_to_find)
 
 
+from pathlib import Path
+
+def list_track_files(dirname, tracksname, sy=None, ly=None):
+    """
+    List available track files and perform a sanity check for missing years.
+
+    Parameters:
+    -----------
+    dirname : str
+        Path to the directory containing track files.
+    tracksname : str
+        Name of the track files to search for.
+    sy : int, optional
+        Starting year (inclusive). If None, the earliest year is used.
+    ly : int, optional
+        Last year (inclusive). If None, the latest year is used.
+
+    Returns:
+    --------
+    tuple
+        A tuple containing:
+        - file_list (list): Sorted list of track file paths.
+        - sy (int): Starting year.
+        - ly (int): Last year.
+
+    Raises:
+    -------
+    ValueError
+        If there are missing years in the directory for the specified range.
+    """
+    years_set = set()  # This will store unique years
+    file_list = []
+
+    for path in Path(dirname).glob(f"*/{tracksname}"):
+        # Extract years
+        if "/" in tracksname: 
+            # if track files are contained in a subdirectory
+            year = path.parts[-3].split('_')[-2]
+        else:
+            # standard setup
+            year = path.parts[-2].split('_')[-2]
+        years_set.add(year)
+        if sy is not None and int(year) < sy:
+            continue
+        if ly is not None and int(year) > ly:
+            continue
+        file_list.append(path)
+
+    file_list.sort()
+    ny = len(file_list)
+
+    if sy is None:
+        sy = int(min(years_set))
+    if ly is None:
+        ly = int(max(years_set))
+
+    # Sanity check: Ensure all years are available
+    if ly - sy + 1 != ny:
+        raise ValueError("Missing years in directory for stats calculation")
+
+    return file_list, sy, ly, ny
+
 ## GZ+
 def stats(dirname,tracksname,statstype="std",sy=None,ly=None,ext=None):
     """
@@ -1094,30 +1158,32 @@ def stats(dirname,tracksname,statstype="std",sy=None,ly=None,ext=None):
         fldnum=statstype[3]
     stat_file_name=os.path.basename(stat_file)
 
-    # list available track files
-    years_set = set()  # This will store unique years
-    file_list = []
-    for path in Path(dirname).glob(f"*/{tracksname}"):
-        # extract year
-        year=path.parts[-2].split('_')[-2]
-        years_set.add(year)
-        if sy is not None and int(year) < sy:
-            continue
-        if ly is not None and int(year) > ly:
-            continue        
-        file_list.append(path)
-    file_list.sort()
-    ny=len(file_list)
+    file_list,sy,ly,ny=list_track_files(dirname, tracksname, sy, ly)
+
+    # # list available track files
+    # years_set = set()  # This will store unique years
+    # file_list = []
+    # for path in Path(dirname).glob(f"*/{tracksname}"):
+    #     # extract year
+    #     year=path.parts[-2].split('_')[-2]
+    #     years_set.add(year)
+    #     if sy is not None and int(year) < sy:
+    #         continue
+    #     if ly is not None and int(year) > ly:
+    #         continue        
+    #     file_list.append(path)
+    # file_list.sort()
+    # ny=len(file_list)
     
-    if sy is  None:
-        sy=int(min(years_set))
-    if ly is None:
-        ly=int(max(years_set))
+    # if sy is  None:
+    #     sy=int(min(years_set))
+    # if ly is None:
+    #     ly=int(max(years_set))
     
-    # sanity check all years are available
-    if ly-sy+1 != ny:
-        print("Missing years in directory for stats calculation")
-        return
+    # # sanity check all years are available
+    # if ly-sy+1 != ny:
+    #     print("Missing years in directory for stats calculation")
+    #     return
 
     # define extension
     ext=f"{statstype}_{sy}-{ly}"
@@ -1418,18 +1484,16 @@ def subsample_timesteps(track_file, step, offset=0):
     return
     
     
-def radial_maps(file_nc,track_file,namefield,intensity=0):
+def radial_maps(expm_dir,track_file,file_nc,namefield,sy=None,ly=None,intensity=0,rotate=0):
+    
+    track_file_list,sy,ly,ny=list_track_files(expm_dir, track_file, sy, ly)
+    track_file=track_file_list[0]
     # compute composite radial map for a given track file and field
 
     cwd = os.getcwd()
     file_nc_name=os.path.basename(file_nc) 
     track_file_dir=os.path.dirname(track_file)
-    expm_dir=os.path.dirname(track_file_dir)
-
-    if intensity>0:
-        sed_filter_intensity=f" -e 's:filter_intensity:y 0 2 {intensity} 1.0e+15 n n:' " 
-    else:
-        sed_filter_intensity=" -e 's:filter_intensity:n:' "
+    #expm_dir=os.path.dirname(track_file_dir)
 
     # read data charactheristics
     data=data_indat(file_nc)
@@ -1437,6 +1501,16 @@ def radial_maps(file_nc,track_file,namefield,intensity=0):
     nxp=str(int(nx)+1)
 
     # prepare input file for radial map
+    if intensity>0:
+        sed_filter_intensity=f" -e 's:filter_intensity:y 0 2 {intensity} 1.0e+15 n n:' " 
+    else:
+        sed_filter_intensity=" -e 's:filter_intensity:n:' "
+
+    if rotate==0:
+        sed_rotate=" -e 's:rotate:n:' "
+    elif rotate==1:
+        sed_rotate=" -e 's:rotate:y 0 3:' "
+
     inputfile_template=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/template_radial_map.in"
     line1 = (
         f"sed -e 's:NXP:{nxp}:' "
@@ -1444,12 +1518,14 @@ def radial_maps(file_nc,track_file,namefield,intensity=0):
         f"-e 's:file_map.nc:{file_nc_name}:' "
         f"-e 's:ff_trs:{track_file}:' "
         f"{sed_filter_intensity}"
+        f"{sed_rotate}"
         f"{inputfile_template} > indat/radial_map.in"
     )
     
-    # link file_nc into indat
+    # link file_nc of radial composite into indat
     os.system(f"ln -fs {file_nc} {str(Path.home())}/track-master/indat/")
 
+    # running commands
     os.chdir(str(Path.home()) + "/track-master")
     print(line1)
     os.system(line1)
@@ -1457,7 +1533,6 @@ def radial_maps(file_nc,track_file,namefield,intensity=0):
     # run track for radial map
     ext='radial'
     os.system(f"bin/track.linux -f {ext} < indat/radial_map.in")
-
 
     # prepare input file for tcident
     reg_file=f"{Path.home()}/track-master/outdat/ff_trs.{ext}_addfld_reg"
@@ -1487,3 +1562,169 @@ def radial_maps(file_nc,track_file,namefield,intensity=0):
     os.system(f"rm {Path.home()}/track-master/outdat/ff_trs.{ext}.nc")
     os.system(f"rm {Path.home()}/track-master/outdat/ff_trs.{ext}")
     os.system(f"rm {Path.home()}/track-master/outdat/initial.{ext}")
+
+
+
+def radial_maps_2(expm_dir,track_file,file_nc,namefield,sy=None,ly=None,intensity=(None,None),rotate=0,missing=False,interpolation="spline",ext=None):
+
+    if intensity==(None,None):
+        min_intensity = 0
+        max_intensity = 1.0e+15
+    else: 
+        min_intensity,max_intensity=intensity
+
+    # list available track files
+    track_file_list,sy,ly,ny=list_track_files(expm_dir, track_file, sy, ly)
+
+    # prepare input file for radial map
+    if intensity != (None,None):
+        sed_filter_intensity=f" -e 's:filter_intensity:y 0 2 {min_intensity} {max_intensity} n n:' " 
+    else:
+        sed_filter_intensity=" -e 's:filter_intensity:n:' "
+
+    if ext==None:
+        ext=[]
+
+    if rotate==0:
+        sed_rotate=" -e 's:rotate:n:' "
+    elif rotate==1:
+        sed_rotate=" -e 's:rotate:y 0 3:' "
+        ext=f"{ext}_rot"
+
+    # input template
+    inputfile_template=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/template_radial_map.in"
+    tcident_template=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/template_tcident_radialmaps.in"
+
+    # loop over years to produce reg files
+    reg_avg_list=[]
+    years_list=[]
+    iy=0
+    yy=sy
+    while yy<=ly:
+        track_file_1=track_file_list[iy]
+        file_nc_1=file_nc.replace("YYYY",str(yy))
+        file_nc_name_1=os.path.basename(file_nc_1)
+
+        # read data charactheristics
+        data=data_indat(file_nc_1)
+        nx, ny = data.get_nx_ny()
+        nxp=str(int(nx)+1)
+
+        if data.has_nh_pole():
+            # remove one latitude grid point from ny (string)
+            ny = str(int(ny)-1)
+            sed_nh_string="-e 's:NH:n:' "
+        else:
+            sed_nh_string="-e '/NH/d' "
+
+        if data.has_sh_pole():
+            ny = str(int(ny)-1)
+            sed_sh_string="-e 's:SH:n:' "
+        else:
+            sed_sh_string="-e '/SH/d' "
+
+        if data.has_equator():
+            sed_eq_string="-e 's:equator:n:' "
+            ny = str(int(ny)-1)
+        else:
+            sed_eq_string="-e '/equator/d' "
+
+        if missing==True:
+            print('Forcing interpolation method to nearest')
+            interpolation="nearest"
+
+        if interpolation=='spline':
+            sed_interpolation_string=" -e 's:interpolation:0:' -e 's:interp1:0:' -e 's:interp2:0.:' "
+        elif interpolation=='nearest':
+            # nearest interpolation
+            sed_interpolation_string=" -e 's:interpolation:1:' -e '/interp1/d' -e '/interp2/d' "
+
+        line1 = (
+            f"sed -e 's:NXP:{nxp}:' "
+            f"-e 's:NY:{ny}:' "
+            f"{sed_nh_string}"
+            f"{sed_sh_string}"
+            f"{sed_eq_string}" 
+            f"{sed_interpolation_string}" 
+            f"-e 's:file_map.nc:{file_nc_name_1}:' "
+            f"-e 's:ff_trs:{track_file_1}:' "
+            f"{sed_filter_intensity}"
+            f"{sed_rotate}"
+            f"{inputfile_template} > indat/radial_map.in"
+        )
+
+        # link file_nc of radial composite into indat
+        os.system(f"ln -fs {file_nc_1} {str(Path.home())}/track-master/indat/")
+
+        # running commands
+        os.chdir(str(Path.home()) + "/track-master")
+        print(line1)
+        os.system(line1)
+
+        # run track for radial map
+        os.system(f"bin/track.linux -f {ext} < indat/radial_map.in")
+
+        # prepare input file for tcident
+        reg_file=f"{Path.home()}/track-master/outdat/ff_trs.{ext}_addfld_reg"
+        track_file_reg=f"{Path.home()}/track-master/outdat/ff_trs.{ext}"
+        line2= (
+            f"-e 's:ff_trs.reg:{reg_file}:' "
+            f"-e 's:track_file:{track_file_reg}:' "
+            f"-e 's:namefield:{namefield}:' "
+            f"{tcident_template} > indat/tcident_radialmaps.in"
+        )
+
+        # run tcident
+        os.system(f"sed {line2}")
+        
+        # move output
+        print(expm_dir)
+        os.system(f"mkdir -p {expm_dir}/radial_maps")
+
+        os.chdir(f"{expm_dir}/radial_maps") 
+        os.system(f"{Path.home()}/track-master/utils/bin/tcident < {Path.home()}/track-master/indat/tcident_radialmaps.in")
+
+        # clean and manage output
+        if intensity != (None,None):
+            extout=f"{ext}_I{min_intensity}-{max_intensity}"
+        else:
+            extout=ext
+
+        #reg_file=f"{expm_dir}/radial_maps/ff_trs.{extout}_{namefield}_reg_{yy}"
+        #avg_file=f"{expm_dir}/radial_maps/reg_avg_{extout}_{namefield}_reg_{yy}"
+        os.system(f"mkdir -p {expm_dir}/radial_maps/ff_trs_reg")
+        os.system(f"mv {Path.home()}/track-master/outdat/ff_trs.{ext}_addfld_reg ff_trs_reg/ff_trs.{extout}_{namefield}_reg_{yy}") 
+        os.system(f"mv reg_avg.nc reg_avg_{extout}_{namefield}_reg_{yy}.nc")
+        os.system(f"rm timout.dat dir_speed.dat frmin.dat frmax.dat frange.dat fdif.dat track.dat nums.nc nums.dat reg_avg.dat")
+        os.system(f"rm {Path.home()}/track-master/outdat/initial.{ext}")
+        os.system(f"rm {Path.home()}/track-master/outdat/ff_trs.{ext}.nc")
+        os.system(f"rm {Path.home()}/track-master/outdat/ff_trs.{ext}")
+        #os.system(f"rm {Path.home()}/track-master/outdat/ff_trs.radial.tcident")
+        
+        reg_avg_list.append(f"reg_avg_{extout}_{namefield}_reg_{yy}.nc")
+        years_list.append(yy)
+        yy+=1
+        iy+=1
+
+    # merge different years in one file
+    datasets=[]
+    merged_reg_avg_file=f"{expm_dir}/radial_maps/reg_avg_{extout}_{namefield}_reg_{sy}-{ly}.nc"
+
+    for file, year in zip(reg_avg_list, years_list):
+        ds = xr.open_dataset(file)
+
+        # Add a new 'time' dimension with a single timestamp
+        ds = ds.expand_dims('time')
+        ds['time'] = [np.datetime64(f'{year}-01-01', 'ns')]
+
+        datasets.append(ds)
+
+    # Concatenate along the time dimension
+    combined = xr.concat(datasets, dim='time')
+
+    # Save to new file
+    combined.to_netcdf(merged_reg_avg_file)
+
+    # remove all files in rev_avg_list (except the merged one)
+    for file in reg_avg_list:
+        os.system(f"rm {file}")
