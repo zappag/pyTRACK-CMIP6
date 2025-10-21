@@ -1304,7 +1304,7 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
             infile_e = infile 
     
     # fill missing values
-    if missing==False:
+    if missing==False: 
         infile_ef = infile_e[:-3] + "_filled.nc"
         if os.path.isfile(infile_ef):
             print("File without fillValue and missing_value already exists.")
@@ -1315,8 +1315,11 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
     else:
         # set missing values to 9999999999
         infile_ef = infile_e[:-3] + "_filled.nc"
-        os.system("cdo setmisstoc,1000000000000000000 " + infile_e + " " + infile_ef)
-        print("Missing Values: forcing interplation method to nearest")
+        if os.path.isfile(infile_ef):
+            print("File with fillValue and missing_value already exists.")
+        else:
+            os.system("cdo setmisstoc,1000000000000000000 " + infile_e + " " + infile_ef)
+            print("Missing Values: forcing interplation method to nearest")
         interpolation="nearest"
 
     # setup input file
@@ -1397,7 +1400,8 @@ def add_mean_field(infile, trackfile, radius, fieldname, scaling=1,hourshift=0, 
 
     ext=str(random.randint(0, 100000))
     #line2=f"bin/track.linux -f {ext} < addprec.in > + addfield_{ext}.log 2>&1"
-    line2=f"bin/track.linux -f {ext} < addprec.in 1>/dev/null 2>&1"
+    #line2=f"bin/track.linux -f {ext} < addprec.in 1>/dev/null 2>&1"
+    line2=f"bin/track.linux -f {ext} < addprec.in"
 
     # run adapt input file
     cwd = os.getcwd()
@@ -1491,7 +1495,7 @@ def radial_maps(expm_dir,track_file,file_nc,namefield,sy=None,ly=None,intensity=
     # compute composite radial map for a given track file and field
 
     cwd = os.getcwd()
-    file_nc_name=os.path.basename(file_nc) 
+    file_nc_name=os.path.basename(file_nc)
     track_file_dir=os.path.dirname(track_file)
     #expm_dir=os.path.dirname(track_file_dir)
 
@@ -1565,7 +1569,9 @@ def radial_maps(expm_dir,track_file,file_nc,namefield,sy=None,ly=None,intensity=
 
 
 
-def radial_maps_2(expm_dir,track_file,file_nc,namefield,sy=None,ly=None,intensity=(None,None),rotate=0,missing=False,interpolation="spline",ext=None):
+def radial_maps_2(expm_dir,track_file,file_nc,namefield,sy=None,ly=None,intensity=(None,None),rotate=0,missing=False,interpolation="spline",selection='all',ext=None):
+    from natsort import natsorted
+    import glob
 
     if intensity==(None,None):
         min_intensity = 0
@@ -1590,6 +1596,11 @@ def radial_maps_2(expm_dir,track_file,file_nc,namefield,sy=None,ly=None,intensit
     elif rotate==1:
         sed_rotate=" -e 's:rotate:y 0 3:' "
         ext=f"{ext}_rot"
+
+    if intensity != (None,None):
+        extout=f"{ext}_I{min_intensity}-{max_intensity}"
+    else:
+        extout=ext
 
     # input template
     inputfile_template=f"{Path.home()}/pyTRACK-CMIP6/track_wrapper/indat/template_radial_map.in"
@@ -1663,14 +1674,22 @@ def radial_maps_2(expm_dir,track_file,file_nc,namefield,sy=None,ly=None,intensit
 
         # run track for radial map
         os.system(f"bin/track.linux -f {ext} < indat/radial_map.in")
-
+        os.system(f"rm indat/radial_map.in")
+        
         # prepare input file for tcident
         reg_file=f"{Path.home()}/track-master/outdat/ff_trs.{ext}_addfld_reg"
         track_file_reg=f"{Path.home()}/track-master/outdat/ff_trs.{ext}"
+        
+        if selection == 'all':
+            sed_ext_string = " -e 's:select:0:' "
+        elif selection == 'singlestorms':
+            sed_ext_string = " -e 's:select:1 Nstorm:' "
+        
         line2= (
             f"-e 's:ff_trs.reg:{reg_file}:' "
             f"-e 's:track_file:{track_file_reg}:' "
             f"-e 's:namefield:{namefield}:' "
+            f"{sed_ext_string}"
             f"{tcident_template} > indat/tcident_radialmaps.in"
         )
 
@@ -1680,51 +1699,73 @@ def radial_maps_2(expm_dir,track_file,file_nc,namefield,sy=None,ly=None,intensit
         # move output
         print(expm_dir)
         os.system(f"mkdir -p {expm_dir}/radial_maps")
+        os.system(f"mkdir -p {expm_dir}/radial_maps/ff_trs")
 
         os.chdir(f"{expm_dir}/radial_maps") 
-        os.system(f"{Path.home()}/track-master/utils/bin/tcident < {Path.home()}/track-master/indat/tcident_radialmaps.in")
+
+        if selection == 'all':
+            os.system(f"{Path.home()}/track-master/utils/bin/tcident < {Path.home()}/track-master/indat/tcident_radialmaps.in")
+        elif selection == 'singlestorms':
+            for i in range(1, 56):
+                os.system(f"sed 's:Nstorm:{i} {i}:' {str(Path.home())}/track-master/indat/tcident_radialmaps.in > {str(Path.home())}/track-master/indat/tcident_radialmaps_{i}.in")
+                os.system(f"{Path.home()}/track-master/utils/bin/tcident < {Path.home()}/track-master/indat/tcident_radialmaps_{i}.in -s {i}")
+                os.system(f"mv {Path.home()}/track-master/outdat/ff_trs.{ext}.tcident {expm_dir}/radial_maps/ff_trs/ff_trs.{extout}_{yy}.tcident")
+                os.system(f"mv {expm_dir}/radial_maps/reg_avg.nc {expm_dir}/radial_maps/reg_storm{i}_{yy}.nc")
+                os.system(f"rm {Path.home()}/track-master/outdat/initial.{ext}")
+                os.system(f"rm timout.dat dir_speed.dat frmin.dat frmax.dat frange.dat fdif.dat track.dat nums.nc nums.dat reg_avg.dat")
+                os.system(f"rm {Path.home()}/track-master/indat/tcident_radialmaps_{i}.in")
+            
+            # merge all singlestorms files into one file per year
+            file_list = natsorted(glob.glob(f"{expm_dir}/radial_maps/reg_storm*_{yy}.nc"))
+            print(file_list)
+            file_string = " ".join([f for f in file_list])
+            print(file_string)
+            os.system(f"cdo copy {file_string} {expm_dir}/radial_maps/reg_singlestorms_{extout}_{namefield}_{yy}.nc")            
+            os.system(f"rm {expm_dir}/radial_maps/reg_storm*_{yy}.nc")
+            os.system(f"rm {Path.home()}/track-master/indat/tcident_radialmaps.in")
+
+            #os.system(f"rm {Path.home()}/track-master/outdat/ff_trs.{ext}_addfld_reg") 
+            #os.system(f"rm {Path.home()}/track-master/outdat/ff_trs.{ext}.tcident") 
+            #os.system(f"rm {Path.home()}/track-master/outdat/ff_trs.{ext}")
+
 
         # clean and manage output
-        if intensity != (None,None):
-            extout=f"{ext}_I{min_intensity}-{max_intensity}"
-        else:
-            extout=ext
-
-        #reg_file=f"{expm_dir}/radial_maps/ff_trs.{extout}_{namefield}_reg_{yy}"
-        #avg_file=f"{expm_dir}/radial_maps/reg_avg_{extout}_{namefield}_reg_{yy}"
-        os.system(f"mkdir -p {expm_dir}/radial_maps/ff_trs_reg")
-        os.system(f"mv {Path.home()}/track-master/outdat/ff_trs.{ext}_addfld_reg ff_trs_reg/ff_trs.{extout}_{namefield}_reg_{yy}") 
-        os.system(f"mv reg_avg.nc reg_avg_{extout}_{namefield}_reg_{yy}.nc")
-        os.system(f"rm timout.dat dir_speed.dat frmin.dat frmax.dat frange.dat fdif.dat track.dat nums.nc nums.dat reg_avg.dat")
-        os.system(f"rm {Path.home()}/track-master/outdat/initial.{ext}")
-        os.system(f"rm {Path.home()}/track-master/outdat/ff_trs.{ext}.nc")
-        os.system(f"rm {Path.home()}/track-master/outdat/ff_trs.{ext}")
+        if selection == 'all':
+            #reg_file=f"{expm_dir}/radial_maps/ff_trs.{extout}_{namefield}_reg_{yy}"
+            #avg_file=f"{expm_dir}/radial_maps/reg_avg_{extout}_{namefield}_reg_{yy}"
+            os.system(f"mkdir -p {expm_dir}/radial_maps/ff_trs_reg")
+            os.system(f"mv {Path.home()}/track-master/outdat/ff_trs.{ext}_addfld_reg ff_trs_reg/ff_trs.{extout}_{namefield}_reg_{yy}") 
+            os.system(f"mv reg_avg.nc reg_avg_{extout}_{namefield}_reg_{yy}.nc")
+            os.system(f"rm timout.dat dir_speed.dat frmin.dat frmax.dat frange.dat fdif.dat track.dat nums.nc nums.dat reg_avg.dat")
+            os.system(f"rm {Path.home()}/track-master/outdat/initial.{ext}")
+            os.system(f"rm {Path.home()}/track-master/outdat/ff_trs.{ext}.nc")
+            os.system(f"rm {Path.home()}/track-master/outdat/ff_trs.{ext}")
         #os.system(f"rm {Path.home()}/track-master/outdat/ff_trs.radial.tcident")
-        
-        reg_avg_list.append(f"reg_avg_{extout}_{namefield}_reg_{yy}.nc")
-        years_list.append(yy)
+            reg_avg_list.append(f"reg_avg_{extout}_{namefield}_reg_{yy}.nc")
+            years_list.append(yy)
         yy+=1
         iy+=1
 
-    # merge different years in one file
-    datasets=[]
-    merged_reg_avg_file=f"{expm_dir}/radial_maps/reg_avg_{extout}_{namefield}_reg_{sy}-{ly}.nc"
+    if selection == 'all':
+        # merge different years in one file
+        datasets=[]
+        merged_reg_avg_file=f"{expm_dir}/radial_maps/reg_avg_{extout}_{namefield}_reg_{sy}-{ly}.nc"
 
-    for file, year in zip(reg_avg_list, years_list):
-        ds = xr.open_dataset(file)
+        for file, year in zip(reg_avg_list, years_list):
+            ds = xr.open_dataset(file)
 
-        # Add a new 'time' dimension with a single timestamp
-        ds = ds.expand_dims('time')
-        ds['time'] = [np.datetime64(f'{year}-01-01', 'ns')]
+            # Add a new 'time' dimension with a single timestamp
+            ds = ds.expand_dims('time')
+            ds['time'] = [np.datetime64(f'{year}-01-01', 'ns')]
 
-        datasets.append(ds)
+            datasets.append(ds)
 
-    # Concatenate along the time dimension
-    combined = xr.concat(datasets, dim='time')
+        # Concatenate along the time dimension
+        combined = xr.concat(datasets, dim='time')
 
-    # Save to new file
-    combined.to_netcdf(merged_reg_avg_file)
+        # Save to new file
+        combined.to_netcdf(merged_reg_avg_file)
 
-    # remove all files in rev_avg_list (except the merged one)
-    for file in reg_avg_list:
-        os.system(f"rm {file}")
+        # remove all files in rev_avg_list (except the merged one)
+        for file in reg_avg_list:
+            os.system(f"rm {file}")
