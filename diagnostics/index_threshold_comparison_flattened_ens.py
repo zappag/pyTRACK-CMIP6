@@ -6,6 +6,11 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 import sys
 from matplotlib.patches import Patch
+import logging
+
+# Configure logger
+logging.basicConfig(level=logging.INFO, format='%(message)s')
+logger = logging.getLogger()
 
 # === Logger class ===
 class Logger(object):
@@ -207,19 +212,20 @@ filtered_vaia_ERA5 = filter_tracks_by_timestamps(vaia_tracks_ERA5, timestamps_ER
 prob_pattern_ERA5 = len(timestamps_ERA5) / len(all_ts_ERA5)
 prob_storm_given_pattern_ERA5 = len(filtered_vaia_ERA5) / len(timestamps_ERA5)
 
-print("\n=== ERA5 ===")
-print("a daily mean is performed on the SPIndex" if perform_daily_mean else "no daily mean is performed on the index")
-print(f"Threshold: {threshold}")
-print(f"Start year: {start_year_ERA5}, End year: {end_year_ERA5}")
-print(f"first date is {all_ts_ERA5[0][0]} and last date is {all_ts_ERA5[-1][0]}")
-print(f"Total number of timestamps: {len(all_ts_ERA5)}")
+
+logger.info("\n=== ERA5 ===")
+logger.info("a daily mean is performed on the SPIndex" if perform_daily_mean else "no daily mean is performed on the index")
+logger.info(f"Threshold: {threshold}")
+logger.info(f"Start year: {start_year_ERA5}, End year: {end_year_ERA5}")
+logger.info(f"first date is {all_ts_ERA5[0][0]} and last date is {all_ts_ERA5[-1][0]}")
+logger.info(f"Total number of timestamps: {len(all_ts_ERA5)}")
 if perform_daily_mean:
-    print(f"Number of days above threshold: {len(timestamps_ERA5)}")
+    logger.info(f"Number of days above threshold: {len(timestamps_ERA5)}")
 else:
-    print(f"Number of timestamps above threshold: {len(timestamps_ERA5)}")
-print(f"Number of filtered VAIAlike tracks: {len(filtered_vaia_ERA5)}")
-print(f"P(pattern): {prob_pattern_ERA5:.3f}")
-print(f"P(storm | pattern): {prob_storm_given_pattern_ERA5:.3f}")
+    logger.info(f"Number of timestamps above threshold: {len(timestamps_ERA5)}")
+logger.info(f"Number of filtered VAIAlike tracks: {len(filtered_vaia_ERA5)}")
+logger.info(f"P(pattern): {prob_pattern_ERA5:.3f}")
+logger.info(f"P(storm | pattern): {prob_storm_given_pattern_ERA5:.3f}")
 
 
 # === EC-Earth3 Flattened Ensemble Analysis ===
@@ -232,6 +238,7 @@ def analyze_ec_earth_flat(expn, expt, ens_list, start_year, end_year):
     all_timestamps_flat = []
     timestamps_above_flat = []
     filtered_vaia_flat = []
+    filtered_vaia_counts = {}
 
     for ens in ens_list:
         index_file = os.path.join(base_index_path, f"index_pattern_{model_name}_{label}_{ens}.pkl")
@@ -246,18 +253,27 @@ def analyze_ec_earth_flat(expn, expt, ens_list, start_year, end_year):
 
         filtered_vaia = filter_tracks_by_timestamps(vaia_tracks, ts_above, delta_time)
         filtered_vaia_flat.extend(filtered_vaia.values())
+        filtered_vaia_counts[ens] = len(filtered_vaia)
 
     # compute flattened probabilities
     p_pattern = len(timestamps_above_flat) / len(all_timestamps_flat) if all_timestamps_flat else 0
     p_storm = len(filtered_vaia_flat) / len(timestamps_above_flat) if timestamps_above_flat else 0
 
-    print(f"\n=== {model_name} {label} (flattened ensemble) ===")
-    print(f"Start year: {start_year}, End year: {end_year}")
-    print(f"Total timestamps: {len(all_timestamps_flat)}")
-    print(f"Timestamps above threshold: {len(timestamps_above_flat)}")
-    print(f"Filtered VAIAlike tracks: {len(filtered_vaia_flat)}")
-    print(f"P(pattern): {p_pattern:.3f}")
-    print(f"P(storm | pattern): {p_storm:.3f}")
+    logger.info(f"\n=== {model_name} {label} (flattened ensemble) ===")
+    logger.info(f"Start year: {start_year}, End year: {end_year}")
+    logger.info(f"Total timestamps: {len(all_timestamps_flat)}")
+    logger.info(f"Timestamps above threshold: {len(timestamps_above_flat)}")
+    logger.info(f"Filtered VAIAlike tracks: {len(filtered_vaia_flat)}")
+    logger.info(f"P(pattern): {p_pattern:.3f}")
+    logger.info(f"P(storm | pattern): {p_storm:.3f}")
+
+    logger.info("\nFiltered VAIAlike track counts per ensemble:")
+    total_tracks = 0
+    for ens, count in filtered_vaia_counts.items():
+        logger.info(f"  {ens}: {count}")
+        total_tracks += count
+    logger.info(f"Total filtered VAIAlike tracks across all ensembles: {total_tracks}")
+    logger.info("Filtered VAIAlike tracks from the flattened ensemble: %d", len(filtered_vaia_flat))
 
     return p_pattern, p_storm
 
