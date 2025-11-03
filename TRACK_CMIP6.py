@@ -10,13 +10,14 @@ from pathlib import Path
 trackVar="psl"
 seas="SON"
 model="EC-Earth3"
-expm="historical"
-ensm="r25i1p1f1"
+expm="scenarioMIP"
+expm_type="ssp245"
+ensm="r18i1p1f1"
 level=85000 #(in Pa)
 
 # select years
-y1=1940
-y2=2015
+y1=2070
+y2=2100
 
 
 # general output directory
@@ -24,6 +25,8 @@ refoutDir=f"/home/ghinassi/work/track_output/CMIP6/"
 
 if seas:
     suboutDir=model+"/"+expm+"/"+seas+"/"+ensm+"/"+trackVar+"/"
+    if expm == "scenarioMIP":
+        suboutDir=model+"/"+expm+"/"+expm_type+"/"+seas+"/"+ensm+"/"+trackVar+"/"
 else:
     suboutDir=model+"/"+expm+"/"+ensm+"/"+trackVar+"/"
 
@@ -34,6 +37,8 @@ run_track=True
 
 # set the directories for the input files
 
+# path for scenario experiment
+#/home/ghinassi/work_big/output/CMIP6/scenarioMIP/EC-Earth3/ssp245/6hr/atmos/6hrPlevPt/r2i1p1f1/psl/SON/psl_6hrPlevPt_EC-Earth3_ssp245_r2i1p1f1_gr_2015_SON.nc
 if trackVar == "vor850":
     trackVarDir_u="/home/ghinassi/work/output/CMIP6/historical/EC-Earth3/6hrPt/atmos/6hrPlevPt/r1i1p1f1/ua/"
     trackVarDir_v="/home/ghinassi/work/output/CMIP6/historical/EC-Earth3/6hrPt/atmos/6hrPlevPt/r1i1p1f1/va/"
@@ -41,7 +46,13 @@ if trackVar == "vor850":
         trackVarDir_u=trackVarDir_u + seas + "/"
         trackVarDir_v=trackVarDir_v + seas + "/"
 elif trackVar == "psl":
-    trackVarDir_msl="/home/ghinassi/work/output/CMIP6/historical/EC-Earth3/6hr/atmos/6hrPlevPt/" + ensm + "/psl/"
+    if expm == "historical":
+        trackVarDir_msl="/home/ghinassi/work/output/CMIP6/historical/EC-Earth3/6hr/atmos/6hrPlevPt/" + ensm + "/psl/"
+    elif expm == "scenarioMIP":
+        trackVarDir_msl="/home/ghinassi/work_big/output/CMIP6/scenarioMIP/EC-Earth3/ssp245/6hr/atmos/6hrPlevPt/" + ensm + "/psl/"
+    else:
+        print("expm not recognized")
+        sys.exit(1)
     if seas:
         trackVarDir_msl=trackVarDir_msl + seas + "/"
 else:
@@ -67,25 +78,44 @@ def search_files_expm_seas(directory, expm, ensm, seas, ystart, yend):
     """
     matching_files = []
 
-    
-    for root, dirnames, filenames in os.walk(directory):
-        for filename in filenames:
-            parts = filename[:-3].split('_')
-            if filename.endswith(f"{seas}.nc"):
-                expm1 = parts[3]
-                ensm1 = parts[4]
-                year1 = int(parts[6])
-                seas1 = parts[7]
-                # if length parts is 8 then the file 
-                #print(parts)
-            elif len(parts) > 8:
-                    raise Exception("File name not recognized")
+    if expm == "historical":
+        for root, dirnames, filenames in os.walk(directory):
+            for filename in filenames:
+                parts = filename[:-3].split('_')
+                if filename.endswith(f"{seas}.nc"):
+                    expm1 = parts[3]
+                    ensm1 = parts[4]
+                    year1 = int(parts[6])
+                    seas1 = parts[7]
+                    # if length parts is 8 then the file 
+                    #print(parts)
+                elif len(parts) > 8:
+                        raise Exception("File name not recognized")
 
-            if expm1 == expm and ensm1 == ensm and seas1 == seas and ystart <= year1 <= yend:
-                file_path = os.path.join(root, filename)
-                matching_files.append(file_path)
+                if expm1 == expm and ensm1 == ensm and seas1 == seas and ystart <= year1 <= yend:
+                    file_path = os.path.join(root, filename)
+                    matching_files.append(file_path)
 
-    matching_files.sort()
+        matching_files.sort()
+        
+    elif expm == "scenarioMIP":
+        for root, dirnames, filenames in os.walk(directory):
+            for filename in filenames:
+                parts = filename[:-3].split('_')
+                if filename.endswith(f"{seas}.nc"):
+                    ensm1 = parts[4]
+                    year1 = int(parts[6])
+                    seas1 = parts[7]
+                    # if length parts is 8 then the file 
+                    #print(parts)
+                elif len(parts) > 8:
+                        raise Exception("File name not recognized")
+
+                if ensm1 == ensm and seas1 == seas and ystart <= year1 <= yend:
+                    file_path = os.path.join(root, filename)
+                    matching_files.append(file_path)
+
+        matching_files.sort()
     return matching_files
 
 def search_files_expm(directory, expm, ensm, ystart, yend):
@@ -104,18 +134,35 @@ def search_files_expm(directory, expm, ensm, ystart, yend):
     """
     matching_files = []
     
-    for root, dirnames, filenames in os.walk(directory):
-        for filename in filenames:
-            parts = filename[:-3].split('_')
-            expm1=parts[3]
-            ensm1=parts[4]
-            year1=int(parts[6][:4])
+    if expm == "historical":
+        for root, dirnames, filenames in os.walk(directory):
+            for filename in filenames:
+                parts = filename[:-3].split('_')
+                expm1=parts[3]
+                ensm1=parts[4]
+                year1=int(parts[6][:4])
 
-            if expm1 == expm and ensm1 == ensm and ystart <= year1 <= yend:
-                file_path = os.path.join(root, filename)
-                matching_files.append(file_path)
+                if expm1 == expm and ensm1 == ensm and ystart <= year1 <= yend:
+                    file_path = os.path.join(root, filename)
+                    matching_files.append(file_path)
 
-    matching_files.sort()
+        matching_files.sort()
+        
+    elif expm == "scenarioMIP":
+        #psl_6hrPlevPt_EC-Earth3_ssp245_r2i1p1f1_gr_2015_SON.nc
+        for root, dirnames, filenames in os.walk(directory):
+            for filename in filenames:
+                parts = filename[:-3].split('_')
+                ensm1=parts[4]
+                year1=int(parts[6][:4])
+                
+                print(parts)
+
+                if ensm1 == ensm and ystart <= year1 <= yend:
+                    file_path = os.path.join(root, filename)
+                    matching_files.append(file_path)
+
+        matching_files.sort
     return matching_files
 
 def select_level(file, level=85000):
