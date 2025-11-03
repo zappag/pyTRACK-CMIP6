@@ -37,7 +37,7 @@ SCEN="historical"
 VAR="msl"
 SEAS="SON"
 Y1=1940
-Y2=2014
+Y2=2024
 
 add_field_trackname="ff_trs_neg.TP_rad5"
 

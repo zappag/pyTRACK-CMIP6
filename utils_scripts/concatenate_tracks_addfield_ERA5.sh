@@ -4,8 +4,9 @@ MODEL="ERA5"
 ENSM="*"
 SCEN="historical"
 VAR="msl"
+ADDEDFIELD="TP_rad5"
 SEAS="SON"
-Y1=2005
+Y1=1940
 Y2=2024
 
 if [ "$MODEL" = "EC-Earth3" ]; then
@@ -51,7 +52,7 @@ elif [ "$MODEL" = "ERA5" ]; then
     for year in $(seq $Y1 $Y2); do
         # Generate the file path for the current year
         if [ "$VAR" = "msl" ]; then
-            year_path="/home/ghinassi/work/track_output/ERA5/$SEAS/${VAR}/NH_ERA5_msl_6hr_${year}_${SEAS}/dates/ff_trs_neg.TPrad5"
+            year_path="/home/ghinassi/work/track_output/ERA5/$SEAS/${VAR}/NH_ERA5_msl_6hr_${year}_${SEAS}/dates/ff_trs_neg.${ADDEDFIELD}"
         elif [ "$VAR" = "vor850" ]; then
             year_path="/home/ghinassi/work/track_output/ERA5/$SEAS/${VAR}/NH_ERA5_uv_6hr_${year}_${SEAS}_merged/dates/ff_trs_pos.NAME"
         fi
