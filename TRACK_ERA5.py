@@ -8,12 +8,12 @@ from pathlib import Path
 
 #select the input variable for TRACK, available are msl of vor850 (computed from u&v)
 # input files are netcdf files from ERA5
-trackVar="vor850"
+trackVar="msl"
 seas="SON"
 
 # select years
-y1=2004
-y2=2004
+y1=2024
+y2=2024
 
 run_track=True
 
@@ -170,7 +170,7 @@ if run_track:
         for ff in mfile:
             print("msl input file is: ", ff)
             print("tracking mslp with ERA5 data")
-            track_wrapper.track_era5_mslp(ff, outDir, NH=True, netcdf=False, ysplit=False)
+            track_wrapper.track_mslp(ff, outDir, NH=True, ysplit=False, cmip6=False)
     elif trackVar == "vor850":
         print("tracking vor850 from u&v with ERA5 data")
         if seas is not None:
@@ -185,7 +185,7 @@ if run_track:
 
             print("u file: ", ff_u)
             print("v file: ", ff_v)
-            track_wrapper.track_uv_vor850(ff_u, outDir, ff_v, NH=True, netcdf=False, ysplit=False, cmip6=False)
+            track_wrapper.track_uv_vor850(ff_u, outDir, ff_v, NH=True, ysplit=False, cmip6=False)
 
 
 
