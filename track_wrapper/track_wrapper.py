@@ -52,7 +52,7 @@ class cmip6_indat(object):
 
 class data_indat(object):
     """Class to obtain basic information about the CMIP6/ERA input data."""
-    def __init__(self, filename, data_type='cmip6'):
+    def __init__(self, filename, data_type):
         """
         Reads the netCDF file and scans its variables.
 
@@ -92,8 +92,11 @@ class data_indat(object):
         return self.vars[-1]
 
     def get_timesteps(self):
-        # returns the number of timesteps
-        return int(len(self.data.variables['time'][:]))
+        if self.data_type == 'era5':
+            # returns the number of timesteps
+            return int(len(self.data.variables['valid_time'][:]))
+        elif self.data_type == 'cmip6':
+            return int(len(self.data.variables['time'][:]))
 
     def has_equator(self):
         # check if the data has an equator
@@ -1271,4 +1274,6 @@ def add_field(infile, trackfile, radius, fieldname, meanfield=False, scaling=1,h
     os.system(f"rm outdat/ff_trs.{ext}")
     os.system(f"rm outdat/ff_trs.{ext}.nc")
 
+    # remove infile_e
+    os.system(f"rm {infile_e}")
     return
