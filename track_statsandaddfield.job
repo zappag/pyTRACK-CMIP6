@@ -1,0 +1,8 @@
+#!/bin/bash
+
+#SBATCH -n 1
+#SBATCH --job-name=track_statsandaddfield
+#SBATCH --time 24:00:00
+#SBATCH --mail-user=p.ghinassi@isac.cnr.it
+
+python track_statsandaddfield.py >> /home/ghinassi/work/slurm_jobs/output_trackstatsaddfield.txt
