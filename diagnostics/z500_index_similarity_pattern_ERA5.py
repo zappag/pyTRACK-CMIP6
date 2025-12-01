@@ -7,6 +7,8 @@ from scipy.optimize import minimize_scalar
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import pickle
+#add cyclic point for plotting
+from cartopy.util import add_cyclic_point
 
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -14,15 +16,15 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 # dir with the vaia track to use as reference
 
-ERA5_track_dir_vaia = f"/work/users/clima/ghinassi/track_output/ERA5/SON/msl/NH_ERA5_msl_6hr_2018_SON/dates/"
-ERA5_track_vaia_filename = "ff_trs_neg.vaiapass_lat38_lon4_rad4_vaiapass_lat45_lon10_rad2"
+ERA5_track_dir_vaia = f"/home/ghinassi/work/track_output/ERA5/SON/msl/NH_ERA5_msl_6hr_2018_SON/dates/"
+ERA5_track_vaia_filename = "ff_trs_neg.vaiapass_lat39_lon4_rad3.5_vaiapass_lat45_lon10_rad3.5.box"
 
-ERA5_track_dir_florence = f"/work/users/clima/ghinassi/track_output/ERA5/SON/msl/NH_ERA5_msl_6hr_1966_SON/dates/"
-ERA5_track_florence_filename = "ff_trs_neg.vaiapass_lat38_lon4_rad4_vaiapass_lat45_lon10_rad2"
+ERA5_track_dir_florence = f"/home/ghinassi/work/track_output/ERA5/SON/msl/NH_ERA5_msl_6hr_1966_SON/dates/"
+ERA5_track_florence_filename = "ff_trs_neg.onlyflorence"
 
 #dir for z500 from ERA5
 #ERA5_z500_dir_gaussian = "/home/ghinassi/work_big/ERA5/z500_gaussian/"
-ERA5_z500_dir = "/home/ghinassi/work_big/ERA5/z500/grid_1x1/SON/"
+ERA5_z500_dir = "/mnt/naszappa/ghinassi/ERA5/z500/grid_1x1/SON/"
 z500_filename_vaia = "ERA5_z500_6hr_2018_SON.nc"
 z500_filename_florence = "ERA5_z500_6hr_1966_SON.nc"
 z500_filename_pattern = "ERA5_z500_6hr_*_SON.nc"
@@ -207,7 +209,7 @@ def get_composite_z500(vaia_track, florence_track, ERA5_z500_dir, z500_filename_
     composite_z500 = xr.concat([ (vaia_z500.isel(valid_time=0) + florence_z500.isel(valid_time=0)) / 2,
                                  (vaia_z500.isel(valid_time=1) + florence_z500.isel(valid_time=1)) / 2], 
                                 dim="valid_time")
-    composite_z500 = composite_z500.assign_coords(valid_time=["composite_initial_time", "composite_max_anomaly_time"])
+    composite_z500 = composite_z500.assign_coords(valid_time=[f"composite_{hours_shift}_prior", "composite_max_anomaly_time"])
     
     #convert longitudes from 0-360 to -180-180
     
@@ -244,43 +246,72 @@ def compute_similarity_pattern_index(field, field_ref, lat1, lat2, lon1, lon2, s
     return index_dict
 
 
-def plot_similarity_pattern_index(z500_data, composite_z500, index_pattern, plotdir):
+def plot_similarity_pattern_index_ref(composite_z500, plotdir, title, plotname, lat_bounds=(30, 60), lon_bounds=(-15, 25)):
 
     lat1_box = 45
     lat2_box = 35
-    num_time_steps = z500_data.valid_time.size
-    fig, axes = plt.subplots(nrows=num_time_steps, ncols=2, figsize=(20, 5 * num_time_steps), subplot_kw={'projection': ccrs.PlateCarree()})
 
-    for i in range(num_time_steps):
-        ax1, ax2 = axes[i]
 
-        # Plot z500_data at time step i
-        ax1.coastlines()
-        ax1.add_feature(cfeature.BORDERS)
-        ax1.add_feature(cfeature.LAND, edgecolor='black')
-        z500_data["z"].isel(valid_time=i).plot(ax=ax1, transform=ccrs.PlateCarree(), cmap='viridis')
-        ax1.set_title(f'z500 at time {str(z500_data.valid_time[i].values)}')
+    """
+    Plot the composite mean Z500 field of ERA5 reference state used to compute the similarity pattern index,
+    """
+    plt.figure(figsize=(8, 5))
+    ax = plt.axes(projection=ccrs.PlateCarree())
 
-        # Add index value to a box in the bottom of the figure
-        index_value = index_pattern[str(z500_data.valid_time[i].values)]
-        ax1.text(0.5, 0.05, f'Similarity Index: {index_value:.2f}', transform=ax1.transAxes, 
-                 ha='center', va='center', bbox=dict(facecolor='white', alpha=0.8))
+    # --- Compute the anomaly (subtract areal mean) ---
+    field_anom = composite_z500.squeeze() - composite_z500.mean(dim=["latitude", "longitude"]).squeeze()
 
-        # Plot composite_z500
-        ax2.coastlines()
-        ax2.add_feature(cfeature.BORDERS)
-        ax2.add_feature(cfeature.LAND, edgecolor='black')
-        composite_z500.plot(ax=ax2, transform=ccrs.PlateCarree(), cmap='viridis')
-        ax2.set_title('Composite z500')
+    # --- Plot color shading of absolute geopotential height ---
+    im = composite_z500.plot(
+        ax=ax,
+        transform=ccrs.PlateCarree(),
+        cmap="RdYlBu_r",
+        vmin=5200,
+        vmax=6000,
+        add_colorbar=False,
+    )
 
-        # Add black dashed lines marking lat1_box and lat2_box
-        for ax in [ax1, ax2]:
-            ax.plot([z500_data.longitude.min(), z500_data.longitude.max()], [lat1_box, lat1_box], 'k--')
-            ax.plot([z500_data.longitude.min(), z500_data.longitude.max()], [lat2_box, lat2_box], 'k--')
+    # --- Add black contour lines for anomalies ---
+    anomaly_levels = np.arange(-200, 201, 40)  # contour every 40 m anomaly
+    # Add cyclic point to handle longitude wrapping
+    field_cyclic, lon_cyclic = add_cyclic_point(field_anom, coord=composite_z500.longitude, axis=1)
 
-    plt.tight_layout()
-    plt.savefig(os.path.join(plotdir, 'similarity_pattern_index_timesteps_vaiaandflorence.png'))
-    print("Saved figure to", os.path.join(plotdir, 'similarity_pattern_index_timesteps_vaiaandflorence.png'))
+    contours = ax.contour(
+        lon_cyclic,
+        composite_z500.latitude,
+        field_cyclic,
+        levels=anomaly_levels,
+        colors='black',
+        linewidths=1,
+        transform=ccrs.PlateCarree(),
+    )
+    
+
+    # --- Map features ---
+    ax.coastlines(linewidth=1)
+    ax.add_feature(cfeature.BORDERS, linewidth=0.5)
+    ax.add_feature(cfeature.LAND, facecolor='lightgray', zorder=0)
+    ax.set_extent([lon_bounds[0], lon_bounds[1], lat_bounds[0], lat_bounds[1]], crs=ccrs.PlateCarree())
+    
+    #add 2 horizontal lines at lat1_box and lat2_box
+    ax.plot([lon_bounds[0], lon_bounds[1]], [lat2_box, lat2_box], color='black', linestyle='--', transform=ccrs.PlateCarree())
+    ax.plot([lon_bounds[0], lon_bounds[1]], [lat1_box, lat1_box], color='black', linestyle='--', transform=ccrs.PlateCarree())
+
+    # --- Gridlines ---
+    gl = ax.gridlines(draw_labels=True, linestyle="--", alpha=0.5)
+    gl.top_labels = False
+    gl.right_labels = False
+
+    # --- Colorbar ---
+    cbar = plt.colorbar(im, ax=ax, orientation="vertical", pad=0.02)
+    cbar.set_label("Geopotential height (m)")
+
+    # --- Title & Save ---
+    plt.title(title, fontsize=11)
+    outfile = os.path.join(plotdir, f"{plotname}.png")
+    plt.savefig(outfile, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Saved ERA5 reference plot: {outfile}")
 
 def plot_pdf_index(index, plotdir):
     # Extract the index values from the dictionary
@@ -302,47 +333,43 @@ lon2=25
 lat1=60
 lat2=30
 
-#hours to consider before and after the max anomaly time
-hours_shift = 48
+#hours to consider before min mslp anomaly time to create composite of z500
+hours_shift = 24
 
 vaia_track = read_ERA5_tracks(ERA5_track_dir_vaia, ERA5_track_vaia_filename)
 florence_track = read_ERA5_tracks(ERA5_track_dir_florence, ERA5_track_florence_filename)
 composite_z500 = get_composite_z500(vaia_track, florence_track, ERA5_z500_dir, z500_filename_vaia, z500_filename_florence, lat1, lat2, lon1, lon2, hours_shift)
-# define the boxes for the spatial average
-boxes = [
-    {'lat1': 45, 'lat2': 30, 'lon1': -15, 'lon2': -10},
-    {'lat1': 45, 'lat2': 30, 'lon1': -10, 'lon2': 10},
-    {'lat1': 45, 'lat2': 30, 'lon1': 10, 'lon2': 25}
-]
 
+compute_index=False
+if compute_index:
+    z500_data = retrieve_z500_data(start_date=None, end_date=None, lat1=lat1, lat2=lat2, lon1=lon1, lon2=lon2)
 
-z500_data = retrieve_z500_data(start_date=None, end_date=None, lat1=lat1, lat2=lat2, lon1=lon1, lon2=lon2)
+    index_pattern_path = os.path.join(pickle_dir, ERA5_pickle_filename)
 
-index_pattern_path = os.path.join(pickle_dir, ERA5_pickle_filename)
+    if os.path.exists(index_pattern_path):
+        print(f"Loading similarity index from {index_pattern_path}")
+        with open(index_pattern_path, 'rb') as f:
+            index_pattern = pickle.load(f)
+    else:
+        print("Pickle file not found. Computing similarity index...")
+        index_pattern = compute_similarity_pattern_index(
+            z500_data,
+            composite_z500.isel(valid_time=0),
+            lat1=45,
+            lat2=35,
+            lon1=lon1,
+            lon2=lon2,
+            save_to_pickle=True,
+            pickle_filename=ERA5_pickle_filename
+        )
 
-if os.path.exists(index_pattern_path):
-    print(f"Loading similarity index from {index_pattern_path}")
-    with open(index_pattern_path, 'rb') as f:
-        index_pattern = pickle.load(f)
-else:
-    print("Pickle file not found. Computing similarity index...")
-    index_pattern = compute_similarity_pattern_index(
-        z500_data,
-        composite_z500.isel(valid_time=0),
-        lat1=45,
-        lat2=35,
-        lon1=lon1,
-        lon2=lon2,
-        save_to_pickle=True,
-        pickle_filename=ERA5_pickle_filename
-    )
-
-
-    
     
 plot_similarity_index_pattern=True
 if plot_similarity_index_pattern:
-        plot_similarity_pattern_index(z500_data, composite_z500.isel(valid_time=0), index_pattern, plotdir)
+    plot_similarity_pattern_index_ref(composite_z500.isel(valid_time=0), plotdir=plotdir,
+                                    title="ERA5 z500 Composite Reference State",
+                                    plotname="ERA5_z500_composite_reference_state_index_computation",
+                                    lat_bounds=(lat2, lat1), lon_bounds=(lon1, lon2))
 
 plot_pdf = False
 
