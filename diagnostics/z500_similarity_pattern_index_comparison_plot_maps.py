@@ -3,210 +3,316 @@ import numpy as np
 import pickle
 import os
 from glob import glob
-import pandas as pd  # For datetime parsing
+import pandas as pd
 
 import matplotlib
 from cartopy.util import add_cyclic_point
-matplotlib.use('Agg')  # must come before importing pyplot
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-
 
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 
 
-def filter_by_year_ERA5(index_dict, start_year, end_year):
+# ======================================================================================
+# ENSEMBLES
+# ======================================================================================
+ensemble_list = [
+    'r2i1p1f1','r7i1p1f1','r10i1p1f1', 'r12i1p1f1','r14i1p1f1',
+    'r16i1p1f1','r17i1p1f1','r18i1p1f1','r19i1p1f1','r20i1p1f1','r21i1p1f1',
+    'r22i1p1f1','r23i1p1f1','r24i1p1f1','r25i1p1f1'
+]
+
+
+# ======================================================================================
+# HELPERS
+# ======================================================================================
+
+def filter_single(index_dict, start_year, end_year):
+    """Filter ERA5 (single dict: {timestamp: value})."""
     return {
-        k: v for k, v in index_dict.items()
-        if start_year <= pd.to_datetime(k).year <= end_year
+        t: v for t, v in index_dict.items()
+        if start_year <= pd.to_datetime(t).year <= end_year
         and v is not None and not np.isnan(v)
     }
 
 def filter_by_year(index_dict, start_year, end_year):
-    filtered_dict = {}
-    for ens_member, time_dict in index_dict.items():
-        filtered_dict[ens_member] = {
-            timestamp: value
-            for timestamp, value in time_dict.items()
-            if start_year <= pd.to_datetime(timestamp).year <= end_year
-            and value is not None and not np.isnan(value)
+    """Filter CMIP6 (dict of dicts: {ens: {timestamp: value}})."""
+    filtered = {}
+    for ens, ts_dict in index_dict.items():
+        filtered[ens] = {
+            t: v
+            for t, v in ts_dict.items()
+            if start_year <= pd.to_datetime(t).year <= end_year
+            and v is not None and not np.isnan(v)
         }
-    return filtered_dict
+    return filtered
+
+
+def composite_z500(z500_dir, timestamps, varname="z", time_var="time", level=None):
+    """Load z500 files in a directory & compute composite mean for matching timestamps."""
+    files = sorted(glob(os.path.join(z500_dir, "*.nc")))
+    if not files:
+        print(f"No NetCDF files in {z500_dir}")
+        return None
+
+    ds = xr.open_mfdataset(files, combine="by_coords")
+
+    # match timestamps
+    ds_times = pd.to_datetime(ds[time_var].values)
+    sel_times = [pd.to_datetime(t) for t in timestamps if pd.to_datetime(t) in ds_times]
+
+    if len(sel_times) == 0:
+        print(f"No matching timestamps in {z500_dir}")
+        return None
+
+    comp = ds[varname].sel({time_var: sel_times}).mean(dim=time_var)
+
+    if level is not None and "plev" in comp.dims:
+        comp = comp.sel(plev=level)
+
+    # convert geopotential in geopotential height (m) only if varname is "z" (ERA5 )
+    if varname=="z":
+        comp = comp / 9.81
+    if "latitude" in comp.dims and "longitude" in comp.dims:
+        comp = comp.rename({"latitude": "lat", "longitude": "lon"})
+
+    return comp
+
+
+def plot_composite(field, title, plotname, plotdir, lat_bounds, lon_bounds):
+    """
+    Plot a composite z500 (or anomaly) field.
+    Ensures field is 2D (lat, lon), adds cyclic point, and plots contours + shading.
+    """
+
+    # -----------------------------------------------------------
+    # 1) FORCE FIELD TO BE 2D: average out any non-lat/lon dims
+    # -----------------------------------------------------------
+    for d in field.dims:
+        if d not in ("lat", "lon"):
+            field = field.mean(d)
+
+    # Now guaranteed shape = (lat, lon)
+
+    # -----------------------------------------------------------
+    # 2) Compute anomaly
+    # -----------------------------------------------------------
+    field_anom = field - field.mean(dim=("lat", "lon"))
+
+    # -----------------------------------------------------------
+    # 3) Determine longitude axis index
+    # -----------------------------------------------------------
+    lon_dim = field_anom.dims.index("lon")
+
+    # -----------------------------------------------------------
+    # 4) Add cyclic point for contouring
+    # -----------------------------------------------------------
+    field_cyc, lon_cyc = add_cyclic_point(
+        field_anom.values,
+        coord=field_anom.lon.values,
+        axis=lon_dim
+    )
+
+    # -----------------------------------------------------------
+    # 5) Start plotting
+    # -----------------------------------------------------------
+    plt.figure(figsize=(8, 5))
+    ax = plt.axes(projection=ccrs.PlateCarree())
+
+    # ---- SHADING: original field (non-anomalous) ----
+    im = field.plot(
+        ax=ax,
+        transform=ccrs.PlateCarree(),
+        cmap="RdYlBu_r",
+        vmin=5200, vmax=6000,
+        add_colorbar=False
+    )
+
+    # ---- CONTOURS: anomaly ----
+    levels = np.arange(-200, 201, 40)
+
+    ax.contour(
+        lon_cyc,
+        field.lat.values,
+        field_cyc,
+        levels=levels,
+        colors="black",
+        linewidths=1,
+        transform=ccrs.PlateCarree()
+    )
+
+    # -----------------------------------------------------------
+    # 6) Map features
+    # -----------------------------------------------------------
+    ax.coastlines()
+    ax.add_feature(cfeature.BORDERS)
+    ax.add_feature(cfeature.LAND, facecolor="lightgray")
+    ax.set_extent([lon_bounds[0], lon_bounds[1],
+                   lat_bounds[0], lat_bounds[1]],
+                  crs=ccrs.PlateCarree())
+
+    gl = ax.gridlines(draw_labels=True, linestyle="--", alpha=0.5)
+    gl.top_labels = False
+    gl.right_labels = False
+
+    cbar = plt.colorbar(im, ax=ax, pad=0.02)
+    cbar.set_label("Geopotential height (m)")
+
+    plt.title(title)
+
+    # -----------------------------------------------------------
+    # 7) Save
+    # -----------------------------------------------------------
+    outfile = os.path.join(plotdir, f"{plotname}.png")
+    plt.savefig(outfile, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"Saved: {outfile}")
+
+
+
+# ======================================================================================
+# MAIN PROGRAM
+# ======================================================================================
 
 def main():
-    # === Predefined year ranges ===
+
+    # ====================== YEAR RANGES ======================
     ERA5_RANGE = (1984, 2014)
     HIST_RANGE = (1984, 2014)
     SSP245_RANGE = (2070, 2100)
     threshold = 0.9
 
+    # ====================== DIRECTORIES ======================
     z500_index_pkl = "/home/ghinassi/work/similarity_pattern_index_pkl"
-    z500_index_ERA5_pkl_filename = "index_pattern_ERA5.pkl"
-    z500_index_CMIP6_hist_pkl_filename = "index_pattern_EC-Earth3_historical_r10i1p1f1.pkl"
-    z500_index_CMIP6_scen_filename = "index_pattern_EC-Earth3_scenarioMIP_ssp245_r10i1p1f1.pkl"
 
-    ERA5_z500_dir = "/home/ghinassi/nas_zappa/naszappa/ghinassi/ERA5/z500/grid_1x1/SON/"
-    CMIP6_hist_z500_dir = "/home/ghinassi/nas_zappa/naszappa/ghinassi/output/CMIP6/historical/EC-Earth3/6hrPt/atmos/6hrPlevPt/r10i1p1f1/zg500/SON/"
-    CMIP6_ssp245_z500_dir = "/home/ghinassi/nas_zappa/naszappa/ghinassi/output/CMIP6/scenarioMIP/EC-Earth3/ssp245//6hrPt/atmos/6hrPlevPt/r10i1p1f1/zg500/SON/"
+    ERA5_z500_dir = (
+        "/home/ghinassi/nas_zappa/naszappa/ghinassi/ERA5/"
+        "z500/grid_1x1/SON/"
+    )
 
-    #plot directory
-    plotdir= "/home/ghinassi/work/track_plots/z500_index/"
+    CMIP6_hist_base = (
+        "/home/ghinassi/nas_zappa/naszappa/ghinassi/output/CMIP6/"
+        "historical/EC-Earth3/6hrPt/atmos/6hrPlevPt/{ens}/zg500/SON/"
+    )
+
+    CMIP6_ssp245_base = (
+        "/home/ghinassi/nas_zappa/naszappa/ghinassi/output/CMIP6/"
+        "scenarioMIP/EC-Earth3/ssp245/6hrPt/atmos/6hrPlevPt/{ens}/zg500/SON/"
+    )
+
+    plotdir = "/home/ghinassi/work/track_plots/z500_index/"
     os.makedirs(plotdir, exist_ok=True)
-    era5_path = os.path.join(z500_index_pkl, z500_index_ERA5_pkl_filename)
-    hist_path = os.path.join(z500_index_pkl, z500_index_CMIP6_hist_pkl_filename)
-    ssp245_path = os.path.join(z500_index_pkl, z500_index_CMIP6_scen_filename)
 
-    with open(era5_path, 'rb') as f:
+    # ==================================================================================
+    # LOAD INDEXES
+    # ==================================================================================
+
+    # ----- ERA5 -----
+    with open(f"{z500_index_pkl}/index_pattern_ERA5.pkl", "rb") as f:
         era5_index = pickle.load(f)
-    with open(hist_path, 'rb') as f:
-        hist_index = pickle.load(f)
-    with open(ssp245_path, 'rb') as f:
-        ssp245_index = pickle.load(f)
 
-    era5_filtered = filter_by_year_ERA5(era5_index, *ERA5_RANGE)
-    hist_filtered = filter_by_year_ERA5(hist_index, *HIST_RANGE)
-    ssp245_filtered = filter_by_year_ERA5(ssp245_index, *SSP245_RANGE)
+    # ----- CMIP6 HISTORICAL & SSP245 (PKL per ensemble) -----
+    hist_index = {}
+    ssp245_index = {}
 
-    era5_timestamps = [k for k, v in era5_filtered.items() if v > threshold]
-    hist_timestamps = [k for k, v in hist_filtered.items() if v > threshold]
-    ssp245_timestamps = [k for k, v in ssp245_filtered.items() if v > threshold]
-  
-    """
-    print(f"ERA5: {len(era5_timestamps)} timestamps above threshold {threshold}")
-    print(f"CMIP6 Historical: {len(hist_timestamps)} timestamps above threshold {threshold}")
-    print(f"CMIP6 SSP245: {len(ssp245_timestamps)} timestamps above threshold {threshold}")
+    for ens in ensemble_list:
 
-    #print such time stamps and the index value for debugging
-    print("ERA5 timestamps and index values above threshold:")
-    for ts in era5_timestamps:
-        print(f"{ts}: {era5_filtered[ts]}") 
-        
-  
-    print("CMIP6 Historical timestamps and index values above threshold for member r10i1p1f1:")
-    for ts in hist_timestamps:
-        print(f"{ts}: {hist_filtered[ts]}")
-        
-    print("CMIP6 SSP245 timestamps and index values above threshold for member r10i1p1f1:")
-    for ts in ssp245_timestamps:
-        print(f"{ts}: {ssp245_filtered[ts]}")
-    """
-    
-    # === Helper function to load and composite z500 data ===
-    def composite_z500(z500_dir, timestamps, varname="z", level=None, time_var="time"):
-        """
-        Compute composite mean of z500 field at given timestamps.
-        - z500_dir: directory with z500 files (e.g., ERA5 or CMIP6)
-        - timestamps: list of timestamps (strings or datetimes)
-        - time_var: name of the time variable in the dataset ("time" or "valid_time")
-        """
-        # Collect matching files
-        files = sorted(glob(os.path.join(z500_dir, "*.nc")))
-        if not files:
-            raise FileNotFoundError(f"No NetCDF files found in {z500_dir}")
+        hist_file = f"{z500_index_pkl}/index_pattern_EC-Earth3_historical_{ens}.pkl"
+        ssp245_file = f"{z500_index_pkl}/index_pattern_EC-Earth3_scenarioMIP_ssp245_{ens}.pkl"
 
-        ds = xr.open_mfdataset(files, combine="by_coords")
+        if os.path.exists(hist_file):
+            with open(hist_file, "rb") as f:
+                hist_index[ens] = pickle.load(f)
+        else:
+            print(f"⚠️ Missing historical file: {hist_file}")
 
-        # Attempt to select by time, handling both datetime64 and string formats
-        time_index = pd.to_datetime(ds[time_var].values)
-        sel_times = [pd.to_datetime(t) for t in timestamps if pd.to_datetime(t) in time_index]
-
-        if not sel_times:
-            print(f"⚠️ No matching timestamps found in {z500_dir}")
-            return None
-
-        # Select data and compute composite mean
-        comp = ds[varname].sel({time_var: sel_times}).mean(dim=time_var)
-
-        if level is not None and "plev" in ds[varname].dims:
-            comp = comp.sel(plev=level)
-
-        # If varname is "z", convert geopotential to geopotential height
-        if varname == "z":
-            g = 9.81  # gravitational acceleration (m/s^2)
-            comp = comp / g
-            #then rename lat and lon and time to standard names
-            comp = comp.rename({"latitude": "lat", "longitude": "lon"})
-
-        return comp
-
-    # === Compute composites ===
-    print("Computing composite means for z500 fields...")
-
-    era5_comp = composite_z500(ERA5_z500_dir, era5_timestamps, varname="z", time_var="valid_time")
-    hist_comp = composite_z500(CMIP6_hist_z500_dir, hist_timestamps, varname="zg500")
-    ssp245_comp = composite_z500(CMIP6_ssp245_z500_dir, ssp245_timestamps, varname="zg500")
-
-    # === Plot maps ===
-    def plot_composite(field, title, plotname, lat_bounds=(30, 60), lon_bounds=(-15, 25)):
-        """
-        Plot the composite mean Z500 field with filled color shading (absolute values)
-        and black contour lines showing geopotential height anomalies (deviation from areal mean).
-        """
-        plt.figure(figsize=(8, 5))
-        ax = plt.axes(projection=ccrs.PlateCarree())
-
-        # --- Compute the anomaly (subtract areal mean) ---
-        field_anom = field.squeeze() - field.mean(dim=["lat", "lon"]).squeeze()
-
-        # --- Plot color shading of absolute geopotential height ---
-        im = field.plot(
-            ax=ax,
-            transform=ccrs.PlateCarree(),
-            cmap="RdYlBu_r",
-            vmin=5200,
-            vmax=6000,
-            add_colorbar=False,
-        )
-
-        # --- Add black contour lines for anomalies ---
-        anomaly_levels = np.arange(-200, 201, 40)  # contour every 40 m anomaly
-        # Add cyclic point to handle longitude wrapping
-        field_cyclic, lon_cyclic = add_cyclic_point(field_anom, coord=field.lon, axis=1)
-
-        contours = ax.contour(
-            lon_cyclic,
-            field.lat,
-            field_cyclic,
-            levels=anomaly_levels,
-            colors='black',
-            linewidths=1,
-            transform=ccrs.PlateCarree(),
-        )
-        
-
-        # --- Map features ---
-        ax.coastlines(linewidth=1)
-        ax.add_feature(cfeature.BORDERS, linewidth=0.5)
-        ax.add_feature(cfeature.LAND, facecolor='lightgray', zorder=0)
-        ax.set_extent([lon_bounds[0], lon_bounds[1], lat_bounds[0], lat_bounds[1]], crs=ccrs.PlateCarree())
-
-        # --- Gridlines ---
-        gl = ax.gridlines(draw_labels=True, linestyle="--", alpha=0.5)
-        gl.top_labels = False
-        gl.right_labels = False
-
-        # --- Colorbar ---
-        cbar = plt.colorbar(im, ax=ax, orientation="vertical", pad=0.02)
-        cbar.set_label("Geopotential height (m)")
-
-        # --- Title & Save ---
-        plt.title(title, fontsize=11)
-        outfile = os.path.join(plotdir, f"{plotname}.png")
-        plt.savefig(outfile, dpi=150, bbox_inches="tight")
-        plt.close()
-        print(f"Saved plot with anomaly contours: {outfile}")
+        if os.path.exists(ssp245_file):
+            with open(ssp245_file, "rb") as f:
+                ssp245_index[ens] = pickle.load(f)
+        else:
+            print(f"⚠️ Missing SSP245 file: {ssp245_file}")
 
 
-    #select lat lon box:
-    lon1=-15
-    lon2=25
-    lat1=60
-    lat2=30
+    # ==================================================================================
+    # FILTER BY YEAR
+    # ==================================================================================
 
-    plot_composite(era5_comp, "ERA5 z500", "ERA5_z500_composite", lat_bounds=(lat2, lat1), lon_bounds=(lon1, lon2))
-    plot_composite(hist_comp, "EC-Earth3 Historical z500", "EC-Earth3_Historical_z500_composite", lat_bounds=(lat2, lat1), lon_bounds=(lon1, lon2))
-    plot_composite(ssp245_comp, "EC-Earth3 SSP245 z500", "EC-Earth3_SSP245_z500_composite", lat_bounds=(lat2, lat1), lon_bounds=(lon1, lon2))
+    era5_filt = filter_single(era5_index, *ERA5_RANGE)
+    hist_filt = filter_by_year(hist_index, *HIST_RANGE)
+    ssp245_filt = filter_by_year(ssp245_index, *SSP245_RANGE)
 
-    
+    era5_ts = [t for t,v in era5_filt.items() if v > threshold]
+    hist_ts = {ens:[t for t,v in ts.items() if v>threshold] for ens,ts in hist_filt.items()}
+    ssp245_ts = {ens:[t for t,v in ts.items() if v>threshold] for ens,ts in ssp245_filt.items()}
+
+
+    # ==================================================================================
+    # COMPOSITES
+    # ==================================================================================
+
+    # ----- ERA5 -----
+    print("\nComputing ERA5 composite...")
+    era5_comp = composite_z500(ERA5_z500_dir, era5_ts, varname="z", time_var="valid_time")
+
+    # ----- HISTORICAL (ALL MEMBERS) -----
+    print("\nComputing Historical multi-ensemble composite...")
+    hist_comps = []
+    for ens in ensemble_list:
+        ts = hist_ts.get(ens, [])
+        if len(ts) == 0:
+            print(f"⚠️ No timestamps above threshold for {ens}")
+            continue
+
+        d = CMIP6_hist_base.format(ens=ens)
+        comp = composite_z500(d, ts, varname="zg500")
+
+        if comp is not None:
+            hist_comps.append(comp)
+
+    hist_comp_all = xr.concat(hist_comps, dim="ens").mean("ens")
+
+
+    # ----- SSP245 (ALL MEMBERS) -----
+    print("\nComputing SSP245 multi-ensemble composite...")
+    scen_comps = []
+    for ens in ensemble_list:
+        ts = ssp245_ts.get(ens, [])
+        if len(ts)==0:
+            print(f"⚠️ No timestamps above threshold for {ens}")
+            continue
+
+        d = CMIP6_ssp245_base.format(ens=ens)
+        comp = composite_z500(d, ts, varname="zg500")
+
+        if comp is not None:
+            scen_comps.append(comp)
+
+    ssp245_comp_all = xr.concat(scen_comps, dim="ens").mean("ens")
+
+
+    # ==================================================================================
+    # PLOTS
+    # ==================================================================================
+    lat_bounds = (30, 60)
+    lon_bounds = (-15, 25)
+
+    plot_composite(
+        era5_comp, "ERA5 Z500", "ERA5_z500_composite",
+        plotdir, lat_bounds, lon_bounds
+    )
+
+    plot_composite(
+        hist_comp_all, "EC-Earth3 Historical (all ensembles)", "Historical_AllMembers_z500",
+        plotdir, lat_bounds, lon_bounds
+    )
+
+    plot_composite(
+        ssp245_comp_all, "EC-Earth3 SSP245 (all ensembles)", "SSP245_AllMembers_z500",
+        plotdir, lat_bounds, lon_bounds
+    )
+
+
 if __name__ == "__main__":
     main()
+
