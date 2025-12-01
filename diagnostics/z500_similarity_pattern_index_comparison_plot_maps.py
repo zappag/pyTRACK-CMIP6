@@ -45,9 +45,9 @@ def main():
     z500_index_CMIP6_hist_pkl_filename = "index_pattern_EC-Earth3_historical_r10i1p1f1.pkl"
     z500_index_CMIP6_scen_filename = "index_pattern_EC-Earth3_scenarioMIP_ssp245_r10i1p1f1.pkl"
 
-    ERA5_z500_dir = "/home/ghinassi/work_big/ERA5/z500/grid_1x1/SON/"
-    CMIP6_hist_z500_dir = "/home/ghinassi/work_big/output/CMIP6/historical/EC-Earth3/6hrPt/atmos/6hrPlevPt/r10i1p1f1/zg500/SON/"
-    CMIP6_ssp245_z500_dir = "/home/ghinassi/work_big/output/CMIP6/scenarioMIP/EC-Earth3/ssp245//6hrPt/atmos/6hrPlevPt/r10i1p1f1/zg500/SON/"
+    ERA5_z500_dir = "/home/ghinassi/nas_zappa/naszappa/ghinassi/ERA5/z500/grid_1x1/SON/"
+    CMIP6_hist_z500_dir = "/home/ghinassi/nas_zappa/naszappa/ghinassi/output/CMIP6/historical/EC-Earth3/6hrPt/atmos/6hrPlevPt/r10i1p1f1/zg500/SON/"
+    CMIP6_ssp245_z500_dir = "/home/ghinassi/nas_zappa/naszappa/ghinassi/output/CMIP6/scenarioMIP/EC-Earth3/ssp245//6hrPt/atmos/6hrPlevPt/r10i1p1f1/zg500/SON/"
 
     #plot directory
     plotdir= "/home/ghinassi/work/track_plots/z500_index/"
@@ -203,9 +203,9 @@ def main():
     lat1=60
     lat2=30
 
-    plot_composite(era5_comp, "ERA5 z500 Composite (Index > Threshold)", "ERA5_z500_composite", lat_bounds=(lat2, lat1), lon_bounds=(lon1, lon2))
-    plot_composite(hist_comp, "EC-Earth3 Historical z500 Composite (Index > Threshold)", "EC-Earth3_Historical_z500_composite", lat_bounds=(lat2, lat1), lon_bounds=(lon1, lon2))
-    plot_composite(ssp245_comp, "EC-Earth3 SSP245 z500 Composite (Index > Threshold)", "EC-Earth3_SSP245_z500_composite", lat_bounds=(lat2, lat1), lon_bounds=(lon1, lon2))
+    plot_composite(era5_comp, "ERA5 z500", "ERA5_z500_composite", lat_bounds=(lat2, lat1), lon_bounds=(lon1, lon2))
+    plot_composite(hist_comp, "EC-Earth3 Historical z500", "EC-Earth3_Historical_z500_composite", lat_bounds=(lat2, lat1), lon_bounds=(lon1, lon2))
+    plot_composite(ssp245_comp, "EC-Earth3 SSP245 z500", "EC-Earth3_SSP245_z500_composite", lat_bounds=(lat2, lat1), lon_bounds=(lon1, lon2))
 
     
 if __name__ == "__main__":
