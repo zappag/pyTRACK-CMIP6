@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 import sys
 from matplotlib.patches import Patch
+import scipy.stats as st
+import re
 
 # === Logger class ===
 class Logger(object):
@@ -23,7 +25,7 @@ class Logger(object):
 
 # === Configuration ===
 threshold = 0.9
-delta_time = 48
+delta_time = 48  # hours
 perform_daily_mean = True
 
 # Independent year ranges for datasets
@@ -41,26 +43,30 @@ outputh_path = "/home/ghinassi/work/track_plots/summary_index_probability/"
 verbose_output_file = "index_threshold_comparison_verbose.txt"
 output_file = "index_threshold_comparison_output.txt"
 
-print_verbose = False  # Set to False to disable verbose output
+print_verbose = True  # Set to False to disable verbose output
 if not os.path.exists(outputh_path):
     os.makedirs(outputh_path, exist_ok=True)
 if print_verbose:
     sys.stdout = Logger(os.path.join(outputh_path, verbose_output_file))
     sys.__stdout__.write(f"Verbose output will be saved to: {os.path.join(outputh_path, verbose_output_file)}\n")
 
-print_txt = False  # Set to False to disable summary output
+print_txt = True  # Set to False to disable summary output
+
+
+model_name = "EC-Earth3"
 
 # === Paths ===
+#ERA5 paths
 index_path_ERA5 = "/home/ghinassi/work/similarity_pattern_index_pkl/index_pattern_ERA5.pkl"
 ERA5_tracks_path = "/home/ghinassi/work/track_output/ERA5/SON/msl/total_tracks/"
 ERA5_filtered_path = "/home/ghinassi/work/track_output/ERA5/SON/msl/vaia_analogue/"
-ERA5_filtered_file = "concatenated_tracks_lat38_lon4_rad4_lat45_lon8_rad4_1940-2024.txt"
+ERA5_filtered_file = "concatenated_tracks_firstlatpass39_firstlonpass4_firstrad3.5_secondlatpass45_secondlonpass10_secondrad3.5_box_1940-2024.txt"
 
+#CMIP6 paths
 base_index_path = "/home/ghinassi/work/similarity_pattern_index_pkl/"
-base_tracks_path = "/home/ghinassi/work/track_output/CMIP6/EC-Earth3/"
-vaia_tracks_filename = "concatenated_tracks_lat38_lon4_rad4_lat45_lon8_rad4.txt"
-
-model_name = "EC-Earth3"
+base_tracks_path = f"/home/ghinassi/work/track_output/CMIP6/{model_name}/"
+vaia_tracks_filename_hist = f"concatenated_tracks_firstlatpass39_firstlonpass4_firstrad3.5_secondlatpass45_secondlonpass10_secondrad3.5_gen_{start_year_hist}-{end_year_hist}.txt"
+vaia_tracks_filename_scen = f"concatenated_tracks_firstlatpass39_firstlonpass4_firstrad3.5_secondlatpass45_secondlonpass10_secondrad3.5_gen_{start_year_scen}-{end_year_scen}.txt"
 
 #directory for plotting
 plot_dir = "/home/ghinassi/work/track_plots/storm_given_pattern/"
@@ -194,6 +200,58 @@ def filter_tracks_by_timestamps(tracks, timestamps, delta_time=0):
             ts_set.add((base + pd.Timedelta(hours=delta_time)).strftime('%Y%m%d%H'))
     return {k: v for k, v in tracks.items() if any(p[0] in ts_set for p in v["data"])}
 
+def read_tracks_for_weights(filepath):
+    """
+    Read track counts from a summary file to compute weights for flattened ensemble means.
+    Expected lines:
+    ERA5 (1984-2014): total_ts=2821, largescale_timesteps=100, total_tracks=36, large_scale=11, large+precip=3
+    Historical r2i1p1f1: total_ts=2821, largescale_timesteps=135, total_tracks=49, large_scale=14, large+precip=3
+    ...
+    ssp245 r25i1p1f1: total_ts=2821, largescale_timesteps=12, total_tracks=41, large_scale=5, large+precip=3
+    ...
+    """
+    hist_counts = {}
+    ssp_counts = {}
+    with open(filepath, "r") as f:
+        for line in f:
+            hist_match = re.match(r"Historical\s+(r\d+i1p1f1):\s*total_ts=(\d+),\s*largescale_timesteps=(\d+),\s*total_tracks=(\d+),\s*large_scale=(\d+),\s*large\+precip=(\d+)", line)
+            ssp_match = re.match(r"ssp245\s+(r\d+i1p1f1):\s*total_ts=(\d+),\s*largescale_timesteps=(\d+),\s*total_tracks=(\d+),\s*large_scale=(\d+),\s*large\+precip=(\d+)", line)
+            if hist_match:
+                member = hist_match.group(1)
+                total_ts = int(hist_match.group(2))
+                large_scale_ts = int(hist_match.group(3))
+                total_tracks = int(hist_match.group(4))
+                large_scale = int(hist_match.group(5))
+                large_precip = int(hist_match.group(6))
+                hist_counts[member] = {
+                    "total_ts": total_ts,
+                    "largescale_timesteps": large_scale_ts,
+                    "total_tracks": total_tracks,
+                    "large_scale": large_scale,
+                    "large_precip": large_precip
+                }
+            elif ssp_match:
+                member = ssp_match.group(1)
+                total_ts = int(ssp_match.group(2))
+                large_scale_ts = int(ssp_match.group(3))
+                total_tracks = int(ssp_match.group(4))
+                large_scale = int(ssp_match.group(5))
+                large_precip = int(ssp_match.group(6))
+                ssp_counts[member] = {
+                    "total_ts": total_ts,
+                    "largescale_timesteps": large_scale_ts,
+                    "total_tracks": total_tracks,
+                    "large_scale": large_scale,
+                    "large_precip": large_precip
+                }
+    return hist_counts, ssp_counts
+
+def weighted_mean(values, weights):
+    values, weights = np.array(values), np.array(weights)
+    if np.sum(weights) == 0:
+        return np.mean(values)
+    return np.sum(values * weights) / np.sum(weights)
+
 # === ERA5 Analysis ===
 
 timestamps_ERA5 = timestamps_above_threshold(index_path_ERA5, threshold, start_year_ERA5, end_year_ERA5)
@@ -227,6 +285,7 @@ print(f"P(storm | pattern): {prob_storm_given_pattern_ERA5:.3f}")
 def analyze_ec_earth(expn, expt, ens_list, start_year, end_year):
     label = f"{expn}_{expt}" if expn == "scenarioMIP" else expn
     label_path = f"{expn}/{expt}" if expn == "scenarioMIP" else expn
+    vaia_tracks_filename = vaia_tracks_filename_scen if expn == "scenarioMIP" else vaia_tracks_filename_hist
     probs_pattern = []
     probs_storm = []
     print(f"\n=== {model_name} ===")
@@ -283,70 +342,96 @@ print(f"P(storm | pattern): {mean_storm_scen:.3f}")
 
 # === PLOT ===
 
-def plot_storm_given_pattern(prob_ERA5, prob_hist, prob_scen, labels_hist, labels_scen, plot_dir, plot_type="bar"):
+# Helper function: mean and 95% CI
+def mean_ci(data, confidence=0.95):
+    if len(data) < 2:
+        return np.mean(data), 0
+    mean = np.mean(data)
+    sem = np.std(data, ddof=1) / np.sqrt(len(data))
+    ci = sem * st.t.ppf((1 + confidence) / 2., len(data) - 1)
+    return mean, ci
+
+def plot_storm_given_pattern(
+        prob_ERA5, prob_hist, prob_scen,
+        labels_hist, labels_scen, plot_dir,
+        hist_counts, ssp_counts,
+        plot_type="bar"):
+
     if not os.path.exists(plot_dir):
         os.makedirs(plot_dir)
 
-    mean_hist = np.mean(prob_hist) if prob_hist else 0
-    mean_scen = np.mean(prob_scen) if prob_scen else 0
+    # ------------------------------------------------------
+    # --- Construct weights (largescale_timesteps)
+    # ------------------------------------------------------
+    hist_weights = [
+        hist_counts[ens.replace("HIST ", "")]["largescale_timesteps"]
+        for ens in labels_hist
+    ]
 
-    # Common mean line style (thick, solid black)
-    meanprops = dict(color="black", linestyle="-", linewidth=2.5)
+    scen_weights = [
+        ssp_counts[ens.replace("SSP245 ", "")]["largescale_timesteps"]
+        for ens in labels_scen
+    ]
 
+    # Weighted ensemble means (for plotting only)
+    w_mean_hist = weighted_mean(prob_hist, hist_weights)
+    w_mean_scen = weighted_mean(prob_scen, scen_weights)
+
+
+    # ------------------------------------------------------
+    # --- PLOT
+    # ------------------------------------------------------
     if plot_type == "bar":
-        x_labels = ["ERA5"] + labels_hist + ["Hist ens mean"] + labels_scen + ["ssp245 ens mean"]
-        values = [prob_ERA5] + prob_hist + [np.nan] + prob_scen + [np.nan]
+
+        x_labels = ["ERA5"] + labels_hist + ["Hist ens mean"] \
+                   + labels_scen + ["ssp245 ens mean"]
+        values = [prob_ERA5] + prob_hist + [np.nan] \
+                 + prob_scen + [np.nan]
         x = list(range(len(x_labels)))
 
         colors = (
             ["black"] +
             ["limegreen"] * len(prob_hist) +
-            ["white"] +  # placeholder for box
+            ["white"] +
             ["lightsalmon"] * len(prob_scen) +
-            ["white"]    # placeholder for box
+            ["white"]
         )
 
-        legend_elements = [
-            Patch(facecolor="black", label="ERA5"),
-            Patch(facecolor="darkgreen", label="Hist"),
-            Patch(facecolor="orange", label="ssp245"),
-        ]
-
         plt.figure(figsize=(12, 6))
-        # Bar plot for individual values
+
+        # Bars: unchanged
         for i, val in enumerate(values):
             if not np.isnan(val):
                 plt.bar(x[i], val, color=colors[i])
 
-        # Boxplot for historical
-        box_hist_pos = len(["ERA5"] + labels_hist)
-        plt.boxplot(
-            prob_hist,
-            positions=[box_hist_pos],
-            widths=0.6,
-            patch_artist=True,
-            boxprops=dict(facecolor="darkgreen", alpha=0.7),
-            showfliers=False,
-            showmeans=True,
-            meanline=True,
-            meanprops=meanprops,
-            medianprops=dict(color="none")
-        )
+        # --------------------------------------------------
+        # Weighted ensemble means as dots with CI
+        # --------------------------------------------------
+        pos_hist = len(["ERA5"] + labels_hist)
+        pos_scen = len(["ERA5"] + labels_hist + ["Hist ens mean"] + labels_scen)
 
-        # Boxplot for scenario
-        box_scen_pos = len(["ERA5"] + labels_hist + ["Hist ens mean"] + labels_scen)
-        plt.boxplot(
-            prob_scen,
-            positions=[box_scen_pos],
-            widths=0.6,
-            patch_artist=True,
-            boxprops=dict(facecolor="orange", alpha=0.7),
-            showfliers=False,
-            showmeans=True,
-            meanline=True,
-            meanprops=meanprops,
-            medianprops=dict(color="none")
-        )
+        # Hist weighted mean and CI
+        if prob_hist:
+            mean_hist, ci_hist = mean_ci(prob_hist)
+            plt.errorbar(
+                pos_hist, w_mean_hist, yerr=ci_hist,
+                fmt='o', color='darkgreen', ecolor='black',
+                capsize=5
+            )
+        # SSP245 weighted mean and CI
+        if prob_scen:
+            mean_scen, ci_scen = mean_ci(prob_scen)
+            plt.errorbar(
+                pos_scen, w_mean_scen, yerr=ci_scen,
+                fmt='o', color='darkorange', ecolor='black',
+                capsize=5
+            )
+
+        legend_elements = [
+            Patch(facecolor="black", label="ERA5 (1984-2014)"),
+            Patch(facecolor="darkgreen", label="Hist members"),
+            Patch(facecolor="orange", label="SSP245 members"),
+        ]
 
         plt.xticks(x, x_labels, rotation=45, ha="right")
         plt.ylabel("Probability")
@@ -358,7 +443,9 @@ def plot_storm_given_pattern(prob_ERA5, prob_hist, prob_scen, labels_hist, label
         plot_path = os.path.join(plot_dir, "storm_given_pattern_hist_summary.png")
         plt.savefig(plot_path, dpi=300)
         plt.close()
+
         print(f"Plot saved to: {plot_path}")
+
 
     elif plot_type == "box":
         plt.figure(figsize=(8, 6))
@@ -370,7 +457,7 @@ def plot_storm_given_pattern(prob_ERA5, prob_hist, prob_scen, labels_hist, label
             showfliers=False,
             showmeans=True,
             meanline=True,
-            meanprops=meanprops,
+            meanprops=dict(color="black", linewidth=2.5),
             medianprops=dict(color="none")
         )
         plt.scatter([1], [prob_ERA5], color="red", label="ERA5", zorder=5)
@@ -382,12 +469,10 @@ def plot_storm_given_pattern(prob_ERA5, prob_hist, prob_scen, labels_hist, label
         plot_path = os.path.join(plot_dir, "boxplot_storm_given_pattern.png")
         plt.savefig(plot_path, dpi=300)
         plt.close()
+        print(f"Plot saved to: {plot_path}")
 
     else:
         raise ValueError("Invalid plot_type. Use 'bar' or 'box'.")
-
-    sys.__stdout__.write(f"Plot saved to: {plot_path}\n")
-
 
 def plot_pattern_probability(prob_ERA5, prob_hist, prob_scen, labels_hist, labels_scen, plot_dir, plot_type="bar"):
     if not os.path.exists(plot_dir):
@@ -413,47 +498,35 @@ def plot_pattern_probability(prob_ERA5, prob_hist, prob_scen, labels_hist, label
         )
 
         legend_elements = [
-            Patch(facecolor="black", label="ERA5"),
-            Patch(facecolor="darkgreen", label="Hist"),
-            Patch(facecolor="orange", label="ssp245"),
+            Patch(facecolor="black", label="ERA5 (1984-2014)"),
+            Patch(facecolor="darkgreen", label="Hist (1984-2014)"),
+            Patch(facecolor="orange", label="ssp245 (2070-2100)"),
         ]
 
         plt.figure(figsize=(12, 6))
-        # Bar plot for individual values
+        # Bar plot for individual ensemble members
         for i, val in enumerate(values):
             if not np.isnan(val):
                 plt.bar(x[i], val, color=colors[i])
-
-        # Boxplot for historical
-        box_hist_pos = len(["ERA5"] + labels_hist)
-        plt.boxplot(
-            prob_hist,
-            positions=[box_hist_pos],
-            widths=0.6,
-            patch_artist=True,
-            boxprops=dict(facecolor="darkgreen", alpha=0.7),
-            showfliers=False,
-            showmeans=True,
-            meanline=True,
-            meanprops=meanprops,
-            medianprops=dict(color="none")
-        )
-
-        # Boxplot for scenario
-        box_scen_pos = len(["ERA5"] + labels_hist + ["Hist ens mean"] + labels_scen)
-        plt.boxplot(
-            prob_scen,
-            positions=[box_scen_pos],
-            widths=0.6,
-            patch_artist=True,
-            boxprops=dict(facecolor="orange", alpha=0.7),
-            showfliers=False,
-            showmeans=True,
-            meanline=True,
-            meanprops=meanprops,
-            medianprops=dict(color="none")
-        )
-
+        # Plot ensemble means as dots + 95% CI error bars
+        if prob_hist:
+            mean_hist, ci_hist = mean_ci(prob_hist)
+            pos_hist = len(["ERA5"] + labels_hist)
+            plt.errorbar(
+                pos_hist, mean_hist, yerr=ci_hist,
+                fmt='o', color='darkgreen', ecolor='black',
+                capsize=5
+            )
+        if prob_scen:
+            mean_scen, ci_scen = mean_ci(prob_scen)
+            pos_scen = len(["ERA5"] + labels_hist + ["Hist ens mean"] + labels_scen)
+            plt.errorbar(
+                pos_scen, mean_scen, yerr=ci_scen,
+                fmt='o', color='darkorange', ecolor='black',
+                capsize=5
+            )
+            
+        
         plt.xticks(x, x_labels, rotation=45, ha="right")
         plt.ylabel("Probability")
         plt.title("P(Large scale)")
@@ -492,19 +565,29 @@ def plot_pattern_probability(prob_ERA5, prob_hist, prob_scen, labels_hist, label
     else:
         raise ValueError("Invalid plot_type. Use 'bar' or 'box'.")
 
-    sys.__stdout__.write(f"Plot saved to: {plot_path}\n")
 
     
 # finally plot the results
 labels_hist = [f"HIST {ens}" for ens in ens_list_hist]
 labels_scen = [f"SSP245 {ens}" for ens in ens_list_scen]
 
-plot_storm_given_pattern(prob_storm_given_pattern_ERA5, storm_hist, storm_scen, labels_hist, labels_scen, plot_dir, plot_type="bar")
+# read weights for ensemble members
+hist_counts, ssp_counts = read_tracks_for_weights("/home/ghinassi/work/track_plots/risk_ratio_probabilities/track_counts_summary.txt")
+
+plot_storm_given_pattern(
+    prob_storm_given_pattern_ERA5,
+    storm_hist, storm_scen,
+    labels_hist, labels_scen,
+    plot_dir,
+    hist_counts, ssp_counts,   # <-- add these
+    plot_type="bar"
+)
+
 plot_pattern_probability(prob_pattern_ERA5, pattern_hist, pattern_scen, labels_hist, labels_scen, plot_dir, plot_type="bar")
 
 #now plot box plots
-plot_storm_given_pattern(prob_storm_given_pattern_ERA5, storm_hist, storm_scen, labels_hist, labels_scen, plot_dir, plot_type="box")
-plot_pattern_probability(prob_pattern_ERA5, pattern_hist, pattern_scen, labels_hist, labels_scen, plot_dir, plot_type="box")
+#plot_storm_given_pattern(prob_storm_given_pattern_ERA5, storm_hist, storm_scen, labels_hist, labels_scen, plot_dir, plot_type="box")
+#plot_pattern_probability(prob_pattern_ERA5, pattern_hist, pattern_scen, labels_hist, labels_scen, plot_dir, plot_type="box")
 
 # Print summary to text file
 if print_txt:
@@ -515,16 +598,12 @@ if print_txt:
             prob_pattern_ERA5, prob_storm_given_pattern_ERA5))
         out.write("Historical:\n")
         for ens, p_pattern, p_storm in zip(labels_hist, pattern_hist, storm_hist):
-            out.write(f"  {ens}: P(pattern) = {p_pattern:.4f}, P(storm | pattern) = {p_storm:.4f}\n")
-        out.write(f"  Hist ens mean: P(pattern) = {mean_pattern_hist:.4f}, P(storm | pattern) = {mean_storm_hist:.4f}\n")
+            out.write(f"{ens}: P(pattern) = {p_pattern:.4f}, P(storm | pattern) = {p_storm:.4f}\n")
+        out.write(f"Hist ens mean: P(pattern) = {mean_pattern_hist:.4f}, P(storm | pattern) = {mean_storm_hist:.4f}\n")
         out.write("ScenarioMIP ssp245:\n")
         for ens, p_pattern, p_storm in zip(labels_scen, pattern_scen, storm_scen):
-            out.write(f"  {ens}: P(pattern) = {p_pattern:.4f}, P(storm | pattern) = {p_storm:.4f}\n")
-        out.write(f"  ssp245 ens mean: P(pattern) = {mean_pattern_scen:.4f}, P(storm | pattern) = {mean_storm_scen:.4f}\n")
+            out.write(f"{ens}: P(pattern) = {p_pattern:.4f}, P(storm | pattern) = {p_storm:.4f}\n")
+        out.write(f"SSP245 ens mean: P(pattern) = {mean_pattern_scen:.4f}, P(storm | pattern) = {mean_storm_scen:.4f}\n")
 
     sys.__stdout__.write(f"Summary written to: {output_txt_path}\n")
-        
     
-
-
-
