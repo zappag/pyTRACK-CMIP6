@@ -11,43 +11,54 @@ import cartopy.feature as cfeature
 
 var="msl"
 seas="SON"
+y1=1940
+y2=2024
 
 # dir with the vaia track to use as reference
 
 ERA5_track_dir_vaia = f"/home/ghinassi/work/track_output/ERA5/SON/{var}/NH_ERA5_msl_6hr_2018_SON/dates/"
-ERA5_track_vaia_filename = "ff_trs_neg.vaiagen_latgen38_longen4_radgen4_vaiapass_latpas45_lonpas8_radpas2"
+ERA5_track_vaia_filename = "ff_trs_neg.vaiapass_lat39_lon4_rad3.5_vaiapass_lat45_lon10_rad3.5"
 
 # dir with florence track to use as reference
 ERA5_track_dir_florence = f"/home/ghinassi/work/track_output/ERA5/SON/{var}/NH_ERA5_msl_6hr_1966_SON/dates/"
-ERA5_track_florence_filename = "ff_trs_neg.vaiapass_lat38_lon4_rad4_vaiapass_lat45_lon10_rad2"
+ERA5_track_florence_filename = "ff_trs_neg.vaiapass_lat39_lon4_rad3.5_vaiapass_lat45_lon10_rad3.5"
 
 # other vaia analogous tracks to plot
 ERA5_track_dir_vaia_analogue = f"/home/ghinassi/work/track_output/ERA5/{seas}/{var}/vaia_analogue/"
-concatenated_tracks_filename = "concatenated_tracks_firstlatpass38_firstlonpass4_firstrad4_secondlatpass45_secondlonpass10_secondrad2_1940-2024.txt"
+concatenated_tracks_filename = f"concatenated_tracks_firstlatpass39_firstlonpass4_firstrad3.5_secondlatpass45_secondlonpass10_secondrad3.5_box_{y1}-{y2}.txt"
 
 plotdir= "/home/ghinassi/work/track_plots/vaia_analogue"
 
-def read_ERA5_tracks(ERA5_track_dir, filename=None):
-    
-    tracks = {}
-    
-    if filename:
-        track_id = None
+import os
+
+def read_ERA5_tracks(ERA5_track_dir, filename=None, track_id=None):
+
+    def parse_file(path, target_id=None):
+        """Parse a single file. If target_id is provided, return only that track."""
+        tracks = {}
+
+        current_id = None
         track_data = []
-        with open(os.path.join(ERA5_track_dir, filename), "r") as file:
+        num_points = None
+        start_time = None
+
+        with open(path, "r") as file:
             for line in file:
                 line = line.strip()
+
                 if line.startswith("0") or line.startswith("TRACK_NUM"):
                     continue
+
                 elif line.startswith("TRACK_ID"):
-                    track_id = int(line.split()[1])
-                    #print("Track ID:", track_id)
+                    current_id = int(line.split()[1])
                     start_time = int(line.split()[-1])
+                    track_data = []
                     continue
+
                 elif line.startswith("POINT_NUM"):
                     num_points = int(line.split()[1])
-                    #print("Number of points:", num_points)
                     continue
+
                 elif line:
                     data = line.split()
                     date = data[0]
@@ -55,59 +66,47 @@ def read_ERA5_tracks(ERA5_track_dir, filename=None):
                     lat = float(data[2])
                     track_data.append((date, lon, lat))
 
-                if len(track_data) == num_points:
-                    tracks[track_id] = {
-                        "header": {
-                            "TRACK_ID": track_id,
-                            "START_TIME": start_time,
-                            "POINT_NUM": num_points
-                        },
-                        "data": track_data
-                    }
-                    #print("Header:", tracks[track_id]["header"])
-                    #print("Data (lon, lat):", [(lon, lat) for _, lon, lat in track_data])
-                    track_id = None
-                    track_data = []
-    else:
-        for filename in os.listdir(ERA5_track_dir):
-            track_id = None
-            track_data = []
-            
-            with open(os.path.join(ERA5_track_dir, filename), "r") as file:
-                for line in file:
-                    line = line.strip()
-                    if line.startswith("0") or line.startswith("TRACK_NUM"):
-                        continue
-                    elif line.startswith("TRACK_ID"):
-                        track_id = int(line.split()[1])
-                        #print("Track ID:", track_id)
-                        continue
-                    elif line.startswith("POINT_NUM"):
-                        num_points = int(line.split()[1])
-                        #print("Number of points:", num_points)
-                        continue
-                    elif line:
-                        data = line.split()
-                        date = data[0]
-                        lon = float(data[1])
-                        lat = float(data[2])
-                        track_data.append((date, lon, lat))
-
-                    if len(track_data) == num_points:
-                        tracks[track_id] = {
+                # Track ends
+                if num_points is not None and len(track_data) == num_points:
+                    if target_id is None or current_id == target_id:
+                        tracks[current_id] = {
                             "header": {
-                                "TRACK_ID": track_id,
-                                "START_TIME": data[0],
+                                "TRACK_ID": current_id,
+                                "START_TIME": start_time,
                                 "POINT_NUM": num_points
                             },
                             "data": track_data
                         }
-                        #print("Header:", tracks[track_id]["header"])
-                        #print("Data (lon, lat):", [(lon, lat) for _, lon, lat in track_data])
-                        track_id = None
-                        track_data = []
-    
-    return tracks
+                        if target_id is not None:
+                            return tracks  # return early if only one track is desired
+                    track_data = []
+                    current_id = None
+
+        return tracks
+
+    # --- MAIN LOGIC ---
+
+    # Case 1: filename provided
+    if filename:
+        file_path = os.path.join(ERA5_track_dir, filename)
+        return parse_file(file_path, target_id=track_id)
+
+    # Case 2: scan entire directory
+    all_tracks = {}
+
+    for fname in os.listdir(ERA5_track_dir):
+        file_path = os.path.join(ERA5_track_dir, fname)
+        result = parse_file(file_path, target_id=track_id)
+
+        if track_id is not None:
+            # If user requests a specific track, return it immediately if found
+            if result:
+                return result
+        else:
+            all_tracks.update(result)
+
+    return all_tracks
+
 
 
 def plot_tracks(track_ref, alltracks, plotdir, lat1=None, lat2=None, lon1=None, lon2=None, latgen=None, longen=None, radgen=None, latpas=None, lonpas=None, radpas=None, double_pass=False):
@@ -202,36 +201,8 @@ def plot_florence_and_vaia(track_ref1, track_ref2, alltracks, plotdir, lat1=None
     
     # Create a figure and axes with PlateCarree projection
     fig, ax = plt.subplots(subplot_kw={'projection': projection}, figsize=(10, 6))
-
-    # Plot Florence track (ref track) in black
-    for track_id, track_data in track_ref1.items():
-        data_ref = track_data["data"]
-        
-        # Extract lon and lat values from track data
-        lon_values_ref = [(lon + 180) % 360 - 180 for _, lon, _ in data_ref]
-        lat_values_ref = [lat for _, _, lat in data_ref]
-
-        # Plot the trajectory as a line segment
-        ax.plot(lon_values_ref, lat_values_ref, color="black",
-                linewidth=2,
-                transform=projection,
-                label="Florence")
-        
-    # Plot Vaia track in dark grey
-    for track_id, track_data in track_ref2.items():
-        data_ref = track_data["data"]
-        
-        # Extract lon and lat values from track data
-        lon_values_ref = [(lon + 180) % 360 - 180 for _, lon, _ in data_ref]
-        lat_values_ref = [lat for _, _, lat in data_ref]
-
-        # Plot the trajectory as a line segment
-        ax.plot(lon_values_ref, lat_values_ref, color="darkgrey",
-                linewidth=2,
-                transform=projection,
-                label="Vaia")
-            
-    # Plot all other tracks with different shades of gray
+    
+    # Plot all other tracks with different shades of gray and add a small blue dot at the beginning of each track
     if alltracks:
         for track_id, track_data in alltracks.items():
             data = track_data["data"]
@@ -243,19 +214,53 @@ def plot_florence_and_vaia(track_ref1, track_ref2, alltracks, plotdir, lat1=None
             # Plot the trajectory as a line segment with different shades of gray
             gray_shades = ['#808080', '#A9A9A9', '#C0C0C0', '#D3D3D3', '#DCDCDC']
             color = gray_shades[track_id % len(gray_shades)]
+            
+            # Add a small blue dot at the beginning of each track
+            if lon_values and lat_values:
+                ax.plot(lon_values[0], lat_values[0], 'o', color='blue', markersize=2, transform=projection)
+            
             ax.plot(lon_values, lat_values,
-                    linewidth=0.4,
+                    linewidth=0.3,
                     color=color,
                     transform=projection)
+
+    # Plot Florence track (ref track) in black
+    for track_id, track_data in track_ref1.items():
+        data_ref = track_data["data"]
+        
+        # Extract lon and lat values from track data
+        lon_values_ref = [(lon + 180) % 360 - 180 for _, lon, _ in data_ref]
+        lat_values_ref = [lat for _, _, lat in data_ref]
+
+        # Plot the trajectory as a line segment
+        ax.plot(lon_values_ref, lat_values_ref, color="orange",
+                linewidth=2,
+                transform=projection,
+                label="November 1966")
+        
+    # Plot Vaia track in dark grey
+    for track_id, track_data in track_ref2.items():
+        data_ref = track_data["data"]
+        
+        # Extract lon and lat values from track data
+        lon_values_ref = [(lon + 180) % 360 - 180 for _, lon, _ in data_ref]
+        lat_values_ref = [lat for _, _, lat in data_ref]
+
+        # Plot the trajectory as a line segment
+        ax.plot(lon_values_ref, lat_values_ref, color="maroon",
+                linewidth=2,
+                transform=projection,
+                label="Vaia 2018")
+        
             
     # Add passage circles as polygons
     if latgen and longen and radgen:
         print("adding passage circle at lat: {}, lon: {}, rad: {}".format(latgen, longen, radgen))
-        circle = plt.Circle((longen, latgen), radgen, color='red', fill=False, transform=ccrs.PlateCarree(), label="Pass 1")
+        circle = plt.Circle((longen, latgen), radgen, color='black', fill=False, linewidth=1.5, transform=ccrs.PlateCarree())
         ax.add_patch(circle)
     if latpas and lonpas and radpas:
         print("adding passage circle at lat: {}, lon: {}, rad: {}".format(latpas, lonpas, radpas))
-        circle = plt.Circle((lonpas, latpas), radpas, color='blue', fill=False, transform=ccrs.PlateCarree(), label="Pass 2")
+        circle = plt.Circle((lonpas, latpas), radpas, color='black', fill=False, linewidth=1.5, transform=ccrs.PlateCarree())
         ax.add_patch(circle)
 
 
@@ -278,13 +283,13 @@ def plot_florence_and_vaia(track_ref1, track_ref2, alltracks, plotdir, lat1=None
     ax.legend()
 
     # Add title
-    ax.set_title("Double Pass tracks (Track var: {}, - Seas: {} - ERA5)".format(var, seas))
+    ax.set_title("Double Pass tracks ERA5 {}-{} - {}".format(y1, y2, seas))
     
     # Create the plot directory if it doesn't exist
     os.makedirs(plotdir, exist_ok=True)
     
     # Save plot
-    filename = f"alltracks_florence_ERA5_{var}_{seas}_firstlatpass{latgen}_firstlonpass{longen}_firstrad{radgen}_secondlatpass{latpas}_secondlonpass{lonpas}_secondrad{radpas}.png"
+    filename = f"alltracks_florence_ERA5_{var}_{seas}_firstlatpass{latgen}_firstlonpass{longen}_firstrad{radgen}_secondlatpass{latpas}_secondlonpass{lonpas}_secondrad{radpas}_{y1}-{y2}.png"
     plt.savefig(os.path.join(plotdir, filename))
     print("saved plot named: ", os.path.join(plotdir, filename))
 
@@ -422,7 +427,7 @@ if __name__ == "__main__":
     plot_vaiagen_vaiapass = False
     plot_vaia_doublepass = False
     plot_all_tracks = False
-    plot_florence = True
+    plot_vaia_and_florence_doublepass = True
     
     
     if plot_vaiagen_vaiapass:
@@ -438,8 +443,8 @@ if __name__ == "__main__":
         concatenated_tracks_filename, latpass1, lonpass1, rad1, latpass2, lonpass2, rad2 = read_filtered_tracks(ERA5_track_dir_vaia_analogue, gen_pass=False)
         all_tracks = read_ERA5_tracks(ERA5_track_dir_vaia_analogue, concatenated_tracks_filename)
         plot_tracks(vaia_track, all_tracks, plotdir, lat1=30, lat2=65, lon1=-10, lon2=30, latgen=latpass1, longen=lonpass1, radgen=rad1, latpas=latpass2, lonpas=lonpass2, radpas=rad2, double_pass=True) 
-    elif plot_florence:
-        florence_track = read_ERA5_tracks(ERA5_track_dir_florence, ERA5_track_florence_filename)
+    elif plot_vaia_and_florence_doublepass:
+        florence_track = read_ERA5_tracks(ERA5_track_dir_florence, ERA5_track_florence_filename, track_id=2573)
         vaia_track = read_ERA5_tracks(ERA5_track_dir_vaia, ERA5_track_vaia_filename)
         # read the concatenated tracks from the filtered tracks
         latgen, longen, radgen, latpas, lonpas, radpas = read_filtered_tracks(ERA5_track_dir_vaia_analogue, concatenated_tracks_filename)
