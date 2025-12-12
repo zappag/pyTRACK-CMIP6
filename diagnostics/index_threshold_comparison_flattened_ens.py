@@ -240,10 +240,20 @@ def analyze_ec_earth_flat(expn, expt, ens_list, start_year, end_year):
     filtered_vaia_flat = []
     filtered_vaia_counts = {}
 
+    # store per-ensemble counts / lists so we can log them correctly later
+    timestamps_above_per_ens = {}
+    all_timestamps_per_ens = {}
+
     for ens in ens_list:
         index_file = os.path.join(base_index_path, f"index_pattern_{model_name}_{label}_{ens}.pkl")
         ts_above = timestamps_above_threshold(index_file, threshold, start_year, end_year)
         ts_all = all_timestamps(index_file, start_year, end_year)
+
+        # keep per-ensemble lists
+        timestamps_above_per_ens[ens] = ts_above
+        all_timestamps_per_ens[ens] = ts_all
+
+        # extend flattened lists
         all_timestamps_flat.extend(ts_all)
         timestamps_above_flat.extend(ts_above)
 
@@ -252,6 +262,7 @@ def analyze_ec_earth_flat(expn, expt, ens_list, start_year, end_year):
         vaia_tracks = read_tracks(vaia_dir, vaia_tracks_filename)
 
         filtered_vaia = filter_tracks_by_timestamps(vaia_tracks, ts_above, delta_time)
+        # filtered_vaia is (apparently) a dict of tracks -> keep its values for flattened list
         filtered_vaia_flat.extend(filtered_vaia.values())
         filtered_vaia_counts[ens] = len(filtered_vaia)
 
@@ -261,11 +272,23 @@ def analyze_ec_earth_flat(expn, expt, ens_list, start_year, end_year):
 
     logger.info(f"\n=== {model_name} {label} (flattened ensemble) ===")
     logger.info(f"Start year: {start_year}, End year: {end_year}")
-    logger.info(f"Total timestamps: {len(all_timestamps_flat)}")
-    logger.info(f"Timestamps above threshold: {len(timestamps_above_flat)}")
-    logger.info(f"Filtered VAIAlike tracks: {len(filtered_vaia_flat)}")
+    logger.info(f"Total timestamps (flattened): {len(all_timestamps_flat)}")
+    logger.info(f"Timestamps above threshold (flattened): {len(timestamps_above_flat)}")
+    logger.info(f"Filtered VAIAlike tracks (flattened): {len(filtered_vaia_flat)}")
     logger.info(f"P(pattern): {p_pattern:.3f}")
     logger.info(f"P(storm | pattern): {p_storm:.3f}")
+
+    logger.info("Number of timesteps above threshold and filtered VAIAlike tracks per ensemble:")
+    total_ts = 0
+    for ens in ens_list:
+        # ts_above is the per-ensemble list we stored
+        ts_above = timestamps_above_per_ens.get(ens, [])
+        count_ts = len(ts_above)
+        filtered_count = filtered_vaia_counts.get(ens, 0)
+        logger.info(f"  {ens}: {count_ts} timesteps above threshold")
+        total_ts += count_ts
+    logger.info(f"Total timesteps above threshold summing all ensembles: {total_ts}")
+    logger.info(f"Total timesteps from the flattened ens: {len(timestamps_above_flat)}")
 
     logger.info("\nFiltered VAIAlike track counts per ensemble:")
     total_tracks = 0
@@ -276,6 +299,7 @@ def analyze_ec_earth_flat(expn, expt, ens_list, start_year, end_year):
     logger.info("Filtered VAIAlike tracks from the flattened ensemble: %d", len(filtered_vaia_flat))
 
     return p_pattern, p_storm
+
 
 
 # Flattened historical and scenario results
