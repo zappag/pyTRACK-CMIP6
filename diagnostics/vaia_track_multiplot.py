@@ -5,6 +5,7 @@ import xarray as xr
 import numpy as np
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
+from cartopy.util import add_cyclic_point
 
 # this code reads the filtered tracks after the execution of the script pass_trajectories.sh.
 # The tracks are then plotted on a map.
@@ -15,14 +16,20 @@ import cartopy.feature as cfeature
 ERA5_track_dir_vaia = f"/home/ghinassi/work/track_output/ERA5/SON/msl/vaia_analogue/"
 ERA5_track_vaia_filename = "concatenated_tracks_lat38_lon4_rad4_lat45_lon8_rad4_1940-2024.txt"
 var="msl"  #var used for TRACK can be "msl" or vor850
+target_track_id = 2208  # Change this to the desired track ID 2573 is nov 1966, 2208 is Vaia 2018
 # dir for mslp from ERA5
-
-ERA5_mslp_dir = "/home/zappa/work/ERA5/hourly/mean_sea_level_pressure/6hrs/"
-mslp_filename = "ERA5_mean_sea_level_pressure_6hrs_full_sfc_1966_70_-50_10_55.nc"
-
+ERA5_mslp_dir = "/mnt/naszappa/ERA5/hourly/mean_sea_level_pressure/6hrs/"
 #dir for z500 from ERA5
-ERA5_z500_dir = "/home/ghinassi/work_big/ERA5/z500_gaussian/"
-z500_filename = "ERA5_z500_6hr_1966.nc"
+ERA5_z500_dir = "/home/ghinassi/nas_zappa/naszappa/ghinassi/ERA5/z500_gaussian/"
+if target_track_id == 2208:
+    mslp_filename = "ERA5_mean_sea_level_pressure_6hrs_full_sfc_2018_70_-50_10_55.nc"
+    z500_filename = "ERA5_z500_6hr_2018.nc"
+    name_storm = "Vaia"
+elif target_track_id == 2573:
+    mslp_filename = "ERA5_mean_sea_level_pressure_6hrs_full_sfc_1966_70_-50_10_55.nc"
+    z500_filename = "ERA5_z500_6hr_1966.nc"
+    name_storm = "November 1966"
+
 
 plotdir= "/home/ghinassi/work/track_plots/vaia_analogue/"
 
@@ -291,11 +298,134 @@ def plot_tracks_z500(track_ref, ERA5_z500_dir, z500_filename, plotdir, lat1=None
             print(f"Saved plot in {plotdir} for track {track_id} with z500")
 
             plt.close()
+
+def plot_combined_z500_mslp(track_ref, ERA5_z500_dir, z500_filename, ERA5_mslp_dir, mslp_filename, storm_name,
+                            plotdir, lat1=None, lat2=None, lon1=None, lon2=None):
+
+    # Read ERA5 data
+    z500_data = xr.open_dataset(os.path.join(ERA5_z500_dir, z500_filename))
+    mslp_data = xr.open_dataset(os.path.join(ERA5_mslp_dir, mslp_filename))
+
+    # Extract variables
+    lon_z = z500_data["longitude"]
+    lat_z = z500_data["latitude"]
+    z500 = z500_data["z"].sel(pressure_level=500) / 9.81  # convert geopotential → height
+
+    lon_m = mslp_data["lon"]
+    lat_m = mslp_data["lat"]
+    mslp = mslp_data["MSL"]
+    
+    # Prepare cyclic points for z500 and mslp
+    z500_cp, lon_z_cp = add_cyclic_point(z500.values, coord=lon_z)
+    mslp_cp, lon_m_cp = add_cyclic_point(mslp.values, coord=lon_m)
+
+    for track_id, track_data in track_ref.items():
+        header_ref = track_data["header"]
+        data_ref = track_data["data"]
+
+        # Track coordinates
+        lon_ref = [(lon + 180) % 360 - 180 for _, lon, _, _ in data_ref]
+        lat_ref = [lat for _, _, lat, _ in data_ref]
+        mslp_ref = [mslp for _, _, _, mslp in data_ref]
+
+        # Key times
+        #time_genesis = pd.to_datetime(header_ref["START_TIME"], format="%Y%m%d%H")
+        time_min_mslp = pd.to_datetime(data_ref[mslp_ref.index(max(mslp_ref))][0], format="%Y%m%d%H")
+        time_genesis = time_min_mslp - pd.Timedelta(hours=24)
+        projection = ccrs.PlateCarree()
+        fig, axs = plt.subplots(1, 2, figsize=(14, 6), subplot_kw={"projection": projection})
+
+        for ax, (time_label, current_time, marker_color, marker_label) in zip(
+            axs,
+            [
+                ("24 h prior to mslp", time_genesis, "red", "24 h prior to MSLP"),
+                ("Min MSLP", time_min_mslp, "blue", "Min MSLP"),
+            ],
+        ):
+            # Select fields
+            z500_field = z500.sel(valid_time=current_time)
+            mslp_field = mslp.sel(time=current_time) / 100  # to hPa
+            
+                # Prepare cyclic points for z500 and mslp
+            z500_cp, lon_z_cp = add_cyclic_point(z500_field.values, coord=lon_z)
+            mslp_cp, lon_m_cp = add_cyclic_point(mslp_field.values, coord=lon_m)
+
+            # Plot z500 shading
+            cf = ax.contourf(lon_z_cp, lat_z, z500_cp, levels=np.arange(4800, 6000.1, 100),
+                             cmap="RdYlBu_r", transform=projection, extend="both")
+
+            # Overlay mslp contour lines
+            cs = ax.contour(lon_m_cp, lat_m, mslp_cp, levels=np.arange(990, 1031, 10),
+                            colors="darkgrey", linewidths=2.5, transform=projection)
+            ax.clabel(cs, inline=False, fontsize=10, colors="black", fmt="%d")
+
+            # Plot track only +- 48 hours before and after the min mslp time
+            lon_ref_subset = []
+            lat_ref_subset = []
+            for t, lon, lat, _ in data_ref:
+                t_dt = pd.to_datetime(t, format="%Y%m%d%H")
+                if time_min_mslp - pd.Timedelta(hours=48) <= t_dt <= time_min_mslp + pd.Timedelta(hours=48):
+                    lon_ref_subset.append((lon + 180) % 360 - 180)
+                    lat_ref_subset.append(lat)
+            ax.plot(lon_ref_subset, lat_ref_subset, color="k", linewidth=1.8, transform=projection, label=storm_name)
+            # Track time array
+            track_times = [pd.to_datetime(t, format="%Y%m%d%H") for t, _, _, _ in data_ref]
+            # Find index of current time in track times
+            try:
+                idx = track_times.index(current_time)
+            except ValueError:
+                print(f"Time {current_time} not found in track times for track ID {track_id}. Skipping marker plot.")
+                continue
+
+            # Plot marker at correct position
+            ax.plot(
+                lon_ref[idx],
+                lat_ref[idx],
+                marker="o",
+                color=marker_color,
+                markersize=6,
+                transform=projection,
+                label=marker_label
+            )
+
+            ax.set_title(f"{current_time.strftime('%Y-%m-%d %H:%M')} UTC", fontsize=18)
+
+            # Map setup
+            ax.coastlines()
+            ax.add_feature(cfeature.LAND, color="lightgrey")
+            ax.add_feature(cfeature.BORDERS, linewidth=0.5)
+            gl = ax.gridlines(draw_labels=True, linestyle="--", alpha=0.5)
+            gl.top_labels = False
+            gl.right_labels = False
+            ax.tick_params(axis='both', labelsize=16)
+            if lat1 and lat2 and lon1 and lon2:
+                ax.set_extent([lon1, lon2, lat2, lat1], crs=projection)
+            ax.legend()
+
+        # Colorbar for z500
+        cbar_ax = fig.add_axes([0.15, 0.1, 0.7, 0.02])
+        cbar = fig.colorbar(cf, cax=cbar_ax, orientation="horizontal")
+        cbar.set_label("z500 (m)", fontsize=18)   # ← enlarge label font here
+        # font size for colorbar ticks
+        cbar_ax.tick_params(labelsize=16)
+
+        os.makedirs(plotdir, exist_ok=True)
+        outfile = os.path.join(plotdir, f"combined_z500_mslp_{track_id}_{storm_name.replace(' ', '_')}.png")
+        plt.savefig(outfile, bbox_inches="tight")
+        plt.close()
+        print(f"Saved combined mslp and z500 plot: {outfile}")
+
     
 
 all_tracks = read_ERA5_tracks(ERA5_track_dir_vaia, ERA5_track_vaia_filename)
-target_track_id = 2573  # Change this to the desired track ID
 vaia_track = {track_id: all_tracks[track_id] for track_id in all_tracks if track_id == target_track_id}
-plot_track_msl(vaia_track, ERA5_mslp_dir, mslp_filename, plotdir, lat1=30, lat2=65, lon1=-20, lon2=30, storm_name="Florence")
-plot_tracks_z500(vaia_track, ERA5_z500_dir, z500_filename, plotdir, lat1=30, lat2=65, lon1=-20, lon2=30, storm_name="Florence")
-
+plot_combined_z500_mslp(
+    vaia_track,
+    ERA5_z500_dir,
+    z500_filename,
+    ERA5_mslp_dir,
+    mslp_filename,
+    name_storm,
+    plotdir,
+    lat1=30, lat2=65, lon1=-20, lon2=30,
+)
