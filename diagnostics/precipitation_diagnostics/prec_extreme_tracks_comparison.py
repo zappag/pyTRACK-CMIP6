@@ -9,8 +9,9 @@ from datetime import datetime, timedelta
 from matplotlib.patches import Patch
 import logging
 import sys
+import re
 
-logging.basicConfig(level=logging.WARNING)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # === Configuration ===
@@ -26,14 +27,10 @@ seas = "SON"
 index_path_ERA5 = "/home/ghinassi/work/similarity_pattern_index_pkl/index_pattern_ERA5.pkl"
 ERA5_tracks_path = "/home/ghinassi/work/track_output/ERA5/SON/msl/total_tracks/"
 ERA5_filtered_path = "/home/ghinassi/work/track_output/ERA5/SON/msl/vaia_analogue/"
-ERA5_filtered_file = "concatenated_tracks_lat38_lon4_rad4_lat45_lon8_rad4_1940-2024.txt"
 # === Paths for CMIP6 ===
-
-base_index_path = "/home/ghinassi/work/similarity_pattern_index_pkl/"
-base_tracks_path = "/home/ghinassi/work/track_output/CMIP6/EC-Earth3/"
-vaia_tracks_filename = "concatenated_tracks_lat38_lon4_rad4_lat45_lon8_rad4.txt"
-
 model_name = "EC-Earth3"
+base_index_path = "/home/ghinassi/work/similarity_pattern_index_pkl/"
+base_tracks_path = f"/home/ghinassi/work/track_output/CMIP6/{model_name}/"
 
 def extract_date_bool_dict(filepath, is_excel=True):
     if is_excel:
@@ -269,8 +266,64 @@ def filter_tracks_by_year_range(tracks_dict, start_year, end_year):
         tid: tdata for tid, tdata in tracks_dict.items()
         if track_in_range(tdata)
     }
+    
+def read_tracks_for_weights(filepath):
+    """
+    Read track counts from a summary file to compute weights for flattened ensemble means.
+    Expected lines:
+    ERA5 (1984-2014): total_ts=2821, largescale_timesteps=100, total_tracks=36, large_scale=11, large+precip=3
+    Historical r2i1p1f1: total_ts=2821, largescale_timesteps=135, total_tracks=49, large_scale=14, large+precip=3
+    ...
+    ssp245 r25i1p1f1: total_ts=2821, largescale_timesteps=12, total_tracks=41, large_scale=5, large+precip=3
+    ...
+    """
+    hist_counts = {}
+    ssp_counts = {}
+    with open(filepath, "r") as f:
+        for line in f:
+            hist_match = re.match(r"Historical\s+(r\d+i1p1f1):\s*total_ts=(\d+),\s*largescale_timesteps=(\d+),\s*total_tracks=(\d+),\s*large_scale=(\d+),\s*large\+precip=(\d+)", line)
+            ssp_match = re.match(r"ssp245\s+(r\d+i1p1f1):\s*total_ts=(\d+),\s*largescale_timesteps=(\d+),\s*total_tracks=(\d+),\s*large_scale=(\d+),\s*large\+precip=(\d+)", line)
+            if hist_match:
+                member = hist_match.group(1)
+                total_ts = int(hist_match.group(2))
+                large_scale_ts = int(hist_match.group(3))
+                total_tracks = int(hist_match.group(4))
+                large_scale = int(hist_match.group(5))
+                large_precip = int(hist_match.group(6))
+                hist_counts[member] = {
+                    "total_ts": total_ts,
+                    "largescale_timesteps": large_scale_ts,
+                    "total_tracks": total_tracks,
+                    "large_scale": large_scale,
+                    "large_precip": large_precip
+                }
+            elif ssp_match:
+                member = ssp_match.group(1)
+                total_ts = int(ssp_match.group(2))
+                large_scale_ts = int(ssp_match.group(3))
+                total_tracks = int(ssp_match.group(4))
+                large_scale = int(ssp_match.group(5))
+                large_precip = int(ssp_match.group(6))
+                ssp_counts[member] = {
+                    "total_ts": total_ts,
+                    "largescale_timesteps": large_scale_ts,
+                    "total_tracks": total_tracks,
+                    "large_scale": large_scale,
+                    "large_precip": large_precip
+                }
+    return hist_counts, ssp_counts
 
-def plot_probabilities(result_data, output_dir, year1_era5, year2_era5, year1_hist, year2_hist, year1_ssp245, year2_ssp245, seas, plot_type="bar"):
+def weighted_mean(values, weights):
+    values, weights = np.array(values), np.array(weights)
+    if np.sum(weights) == 0:
+        return np.mean(values)
+    return np.sum(values * weights) / np.sum(weights)
+
+def plot_probabilities(result_data, output_dir, year1_era5, year2_era5,
+                       year1_hist, year2_hist, year1_ssp245, year2_ssp245,
+                       seas, plot_type="bar",
+                       hist_weights=None, ssp_weights=None):
+
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -293,8 +346,20 @@ def plot_probabilities(result_data, output_dir, year1_era5, year2_era5, year1_hi
     # Compute ensemble means
     mean_hist_prob = np.mean(hist_probs) if hist_probs else 0
     mean_ssp_prob = np.mean(ssp_probs) if ssp_probs else 0
-    mean_hist_prob_given = np.mean(hist_probs_given) if hist_probs_given else 0
-    mean_ssp_prob_given = np.mean(ssp_probs_given) if ssp_probs_given else 0
+    
+    # Weighted ONLY for P(extreme | storm, large scale)
+    if hist_weights is not None:
+        weights_hist_ls = [hist_weights[name]["large_scale"] for name in result_data["hist_ens_names"]]
+        mean_hist_prob_given = weighted_mean(hist_probs_given, weights_hist_ls)
+    else:
+        mean_hist_prob_given = np.mean(hist_probs_given) if hist_probs_given else 0
+
+    if ssp_weights is not None:
+        weights_ssp_ls = [ssp_weights[name]["large_scale"] for name in result_data["ssp_ens_names"]]
+        mean_ssp_prob_given = weighted_mean(ssp_probs_given, weights_ssp_ls)
+    else:
+        mean_ssp_prob_given = np.mean(ssp_probs_given) if ssp_probs_given else 0
+
     mean_hist_p_event = np.mean(hist_p_events) if hist_p_events else 0
     mean_ssp_p_event = np.mean(ssp_p_events) if ssp_p_events else 0
 
@@ -318,7 +383,7 @@ def plot_probabilities(result_data, output_dir, year1_era5, year2_era5, year1_hi
             ),
             (
                 [era5_prob_given] + hist_probs_given + [mean_hist_prob_given] + ssp_probs_given + [mean_ssp_prob_given],
-                f"P(Extreme Precipitation | Storm, Large Scale) - {seas}",
+                f"P(Extreme Precipitation | Storm, Large Scale)",
                 "precipitation_given_storm_given_large_scale_probability.png",
                 hist_probs_given,
                 ssp_probs_given,
@@ -342,40 +407,43 @@ def plot_probabilities(result_data, output_dir, year1_era5, year2_era5, year1_hi
                 + ["white"]
             )
 
-            # Bars
+                        # Bars
             for i, (val, color) in enumerate(zip(values, colors)):
                 if (i == 1 + len(hist_ens_names)) or (i == len(x_labels) - 1):
                     continue
                 plt.bar(i, val, color=color)
 
-            # Boxplots for ensemble means
+            # Replace boxplots with mean + 95% CI error bars
+            def mean_ci(data, confidence=0.95):
+                if len(data) < 2:
+                    return np.mean(data), 0
+                import scipy.stats as st
+                mean = np.mean(data)
+                sem = st.sem(data)
+                ci = sem * st.t.ppf((1 + confidence) / 2., len(data) - 1)
+                return mean, ci
+
+            # Plot ensemble means as dots with 95% CI (no bar)
             if hist_list:
-                plt.boxplot(
-                    hist_list,
-                    positions=[1 + len(hist_ens_names)],
-                    widths=0.6,
-                    patch_artist=True,
-                    boxprops=dict(facecolor="darkgreen", alpha=0.7),
-                    showfliers=False,
-                    showmeans=True,
-                    meanline=True,
-                    meanprops=meanprops,
-                    medianprops=dict(color="none"),
+                mean_hist, ci_hist = mean_ci(hist_list)
+                pos_hist = 1 + len(hist_ens_names)
+                plt.errorbar(
+                    pos_hist, mean_hist, yerr=ci_hist,
+                    fmt='o', color='darkgreen', ecolor='black',
+                    capsize=5, 
+                    label=None
                 )
 
             if ssp_list:
-                plt.boxplot(
-                    ssp_list,
-                    positions=[len(x_labels) - 1],
-                    widths=0.6,
-                    patch_artist=True,
-                    boxprops=dict(facecolor="orange", alpha=0.7),
-                    showfliers=False,
-                    showmeans=True,
-                    meanline=True,
-                    meanprops=meanprops,
-                    medianprops=dict(color="none"),
+                mean_ssp, ci_ssp = mean_ci(ssp_list)
+                pos_ssp = len(x_labels) - 1
+                plt.errorbar(
+                    pos_ssp, mean_ssp, yerr=ci_ssp,
+                    fmt='o', color='darkorange', ecolor='black',
+                    capsize=5, 
+                    label=None
                 )
+
 
             plt.xticks(x, x_labels, rotation=45, ha="right")
             plt.ylabel("Probability")
@@ -424,14 +492,16 @@ def plot_probabilities(result_data, output_dir, year1_era5, year2_era5, year1_hi
 def main():
     save_plot = True
     print_txt = True
-    compute_probabilities_bool = True
+    save_results_json = True
+    compute_probabilities_bool = False
     # Define paths and parameters
-    result_file = "/home/ghinassi/precipitation_diagnostics/json_file_probabilities/precipitation_probabilities_given_storm_and_large_scale.json"
+    result_file = "/home/ghinassi/pyTRACK-CMIP6/diagnostics/precipitation_diagnostics/json_file_probabilities/precipitation_probabilities_given_storm_and_large_scale.json"
     output_dir = "/home/ghinassi/work/track_plots/precipitation_extremes"
     output_file_txt = os.path.join("/home/ghinassi/work/track_plots/risk_ratio_probabilities/precipitation_extreme_probabilities.txt")
 
     if not os.path.exists(output_dir):
         os.makedirs(output_dir, exist_ok=True)
+    
 
     # Define years for different datasets
     # ERA5: 1984-2014, Historical: 1984-2014, SSP245: 2070-2100
@@ -450,13 +520,13 @@ def main():
 
         print(f"Processing ERA5 data from {year1_era5} to {year2_era5}, season: {seas}")
         # ERA5 data
-        era5_warning_file = "/home/ghinassi/precipitation_diagnostics/ERA5/ERA5_19500101_20241231_P99_direct_noaverage_italy_gridpoint.csv"
+        era5_warning_file = "/home/ghinassi/work/ENCIRCLE_precipitation/output_precipitation_warning_regions/ERA5/ERA5_19500101_20241231_P99_direct_noaverage_italy_gridpoint.csv"
         print("era5_warning_file:", era5_warning_file)
         era5_track_path = "/home/ghinassi/work/track_output/ERA5/SON/msl/vaia_analogue/"
-        era5_track_file = "concatenated_tracks_lat38_lon4_rad4_lat45_lon8_rad4_1940-2024.txt"
+        ERA5_track_filename = "concatenated_tracks_firstlatpass39_firstlonpass4_firstrad3.5_secondlatpass45_secondlonpass10_secondrad3.5_box_1940-2024.txt"
         era5_dates = extract_date_bool_dict(era5_warning_file, is_excel=False)
         era5_dates = filter_by_year_range(era5_dates, year1_era5, year2_era5)
-        era5_tracks = read_tracks(era5_track_path, era5_track_file)
+        era5_tracks = read_tracks(era5_track_path, ERA5_track_filename)
         era5_tracks = filter_tracks_by_year_range(era5_tracks, year1_era5, year2_era5)
         print(len(era5_tracks), "tracks found in ERA5 data.")
         index_path_ERA5 = "/home/ghinassi/work/similarity_pattern_index_pkl/index_pattern_ERA5.pkl"
@@ -466,10 +536,8 @@ def main():
             )
         print(f"ERA5: P(extreme) = {era5_prob:.4f}, P(extreme | track | large scale) = {era5_prob_given:.4f}, P(event) = {era5_p_event:.4f}")
 
-        model = "EC-Earth3"
         warning_region_path = "/home/ghinassi/work/ENCIRCLE_precipitation/output_precipitation_warning_regions"
-        warning_pattern = "EC-Earth3_concatenated_hist+ssp245_*_19500101_20991231_P99_direct_noaverage_italy_gridpoint.xlsx"
-        track_filename = "concatenated_tracks_lat38_lon4_rad4_lat45_lon8_rad4.txt"
+        warning_pattern = f"{model_name}_concatenated_hist+ssp245_*_19500101_20991231_P99_direct_noaverage_italy_gridpoint.xlsx"
 
         hist_probs, ssp_probs = [], []
         hist_probs_given, ssp_probs_given = [], []
@@ -477,7 +545,7 @@ def main():
         hist_ens_names, ssp_ens_names = [], []
 
         files = glob.glob(os.path.join(warning_region_path, warning_pattern))
-        print(f"\nProcessing {model} model, season: {seas}")
+        print(f"\nProcessing {model_name} model, season: {seas}")
         print(f"years for historical: {year1_hist}-{year2_hist}, ssp245: {year1_ssp245}-{year2_ssp245}")
         print(f"Found {len(files)} warning regions files.")
 
@@ -486,15 +554,18 @@ def main():
             ensemble = warning_file.split("_")[7]
             print(f"\nProcessing ensemble: {ensemble}")
 
-            hist_track_dir = f"/home/ghinassi/work/track_output/CMIP6/{model}/historical/{seas}/{ensemble}/psl/vaia_analogue"
-            ssp_track_dir = f"/home/ghinassi/work/track_output/CMIP6/{model}/scenarioMIP/ssp245/{seas}/{ensemble}/psl/vaia_analogue"
+            hist_track_dir = f"/home/ghinassi/work/track_output/CMIP6/{model_name}/historical/{seas}/{ensemble}/psl/vaia_analogue"
+            ssp_track_dir = f"/home/ghinassi/work/track_output/CMIP6/{model_name}/scenarioMIP/ssp245/{seas}/{ensemble}/psl/vaia_analogue"
+            vaia_tracks_filename_hist = "concatenated_tracks_firstlatpass39_firstlonpass4_firstrad3.5_secondlatpass45_secondlonpass10_secondrad3.5_gen_{}-{}.txt".format(year1_hist, year2_hist)
+            vaia_tracks_filename_ssp = "concatenated_tracks_firstlatpass39_firstlonpass4_firstrad3.5_secondlatpass45_secondlonpass10_secondrad3.5_gen_{}-{}.txt".format(year1_ssp245, year2_ssp245)
 
-            if os.path.isfile(os.path.join(hist_track_dir, track_filename)):
-                index_file = os.path.join(base_index_path, f"index_pattern_{model}_historical_{ensemble}.pkl")
+
+            if os.path.isfile(os.path.join(hist_track_dir, vaia_tracks_filename_hist)):
+                index_file = os.path.join(base_index_path, f"index_pattern_{model_name}_historical_{ensemble}.pkl")
                 logger.info(f"Using Similarity Pattern Index index file: {index_file}")
                 hist_dates = extract_date_bool_dict(warning_file, is_excel=True)
                 hist_dates = filter_by_year_range(hist_dates, year1_hist, year2_hist)
-                hist_tracks = read_tracks(hist_track_dir, track_filename)
+                hist_tracks = read_tracks(hist_track_dir, vaia_tracks_filename_hist)
                 hist_tracks = filter_tracks_by_year_range(hist_tracks, year1_hist, year2_hist)
                 p, pg, pe = compute_probabilities(hist_dates, hist_tracks, 
                     index_file, delta_time_track, days_prev_prec, year1_hist, year2_hist, season=seas)
@@ -503,11 +574,11 @@ def main():
                 hist_p_events.append(pe)
                 hist_ens_names.append(ensemble) 
 
-            if os.path.isfile(os.path.join(ssp_track_dir, track_filename)):
-                index_file = os.path.join(base_index_path, f"index_pattern_{model}_scenarioMIP_ssp245_{ensemble}.pkl")
+            if os.path.isfile(os.path.join(ssp_track_dir, vaia_tracks_filename_ssp)):
+                index_file = os.path.join(base_index_path, f"index_pattern_{model_name}_scenarioMIP_ssp245_{ensemble}.pkl")
                 ssp_dates = extract_date_bool_dict(warning_file, is_excel=True)
                 ssp_dates = filter_by_year_range(ssp_dates, year1_ssp245, year2_ssp245)
-                ssp_tracks = read_tracks(ssp_track_dir, track_filename)
+                ssp_tracks = read_tracks(ssp_track_dir, vaia_tracks_filename_ssp)
                 ssp_tracks = filter_tracks_by_year_range(ssp_tracks, year1_ssp245, year2_ssp245)
                 p, pg, pe = compute_probabilities(ssp_dates, ssp_tracks, 
                     index_file, delta_time_track, days_prev_prec, year1_ssp245, year2_ssp245, season=seas)
@@ -532,16 +603,28 @@ def main():
 
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
+        if save_results_json:
+            if not os.path.exists(os.path.dirname(result_file)):
+                os.makedirs(os.path.dirname(result_file), exist_ok=True)
         print(f"\nSaving results to {result_file}...")
         with open(result_file, "w") as f:
             json.dump(result_data, f, indent=2)
 
     if save_plot:
+        # Load weights
+        hist_counts, ssp_counts = read_tracks_for_weights("/home/ghinassi/work/track_plots/risk_ratio_probabilities/track_counts_summary.txt")
+
         plot_probabilities(result_data, output_dir, year1_era5, year2_era5,
-                   year1_hist, year2_hist, year1_ssp245, year2_ssp245,
-                   seas, plot_type="bar")
+                        year1_hist, year2_hist, year1_ssp245, year2_ssp245,
+                        seas, plot_type="bar",
+                        hist_weights=hist_counts,
+                        ssp_weights=ssp_counts)
+
 
     if print_txt:
+        #if output txt file dir does not exist create it
+        if not os.path.exists(os.path.dirname(output_file_txt)):
+            os.makedirs(os.path.dirname(output_file_txt))
         with open(output_file_txt, "w") as f:
             f.write("\nPrecipitation probabilities:\n")
             f.write(f"ERA5: P(extreme) = {result_data['era5_prob']:.4f}, "
@@ -576,4 +659,3 @@ def main():
         
 if __name__ == "__main__":
     main()
-
