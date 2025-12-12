@@ -142,7 +142,7 @@ def spatial_filter_tracks(tracks, lon_min, lon_max, lat_min, lat_max):
     return filtered_tracks
 
 
-def plot_mslp_pdf(mslp_tot, mslp_filt1, mslp_filt2, plotdir, lon_min, lon_max, lat_min, lat_max):
+def plot_mslp_pdf(mslp_tot, mslp_filt1, plotdir, lon_min, lon_max, lat_min, lat_max):
     # plots the pdf distribution of the minimum sea level pressure of the total and filtered tracks
     # mslp_tot: dictionary with the total tracks
     # mslp_filt: dictionary with the filtered tracks
@@ -160,37 +160,30 @@ def plot_mslp_pdf(mslp_tot, mslp_filt1, mslp_filt2, plotdir, lon_min, lon_max, l
         mslp = [mslp for _, _, _, mslp in data]
         mslp_filt1_min.append(max(mslp)) 
         
-
-    mslp_filt2_min = []
-    for track_id, track_data in mslp_filt2.items():
-        data = track_data["data"]
-        mslp = [mslp for _, _, _, mslp in data]
-        mslp_filt2_min.append(max(mslp))
         
     fig, ax = plt.subplots(1, 1, figsize=(10, 6))
     ax.hist(mslp_tot_min, bins=20, density=True, alpha=0.5, label=f"Total tracks (n={len(mslp_tot)})")
-    ax.hist(mslp_filt1_min, bins=20, density=True, alpha=0.5, label=f"Vaia gen tracks (n={len(mslp_filt1)})")
-    ax.hist(mslp_filt2_min, bins=20, density=True, alpha=0.5, label=f"Vaia gen+pass tracks (n={len(mslp_filt2)})")
+    ax.hist(mslp_filt1_min, bins=20, density=True, alpha=0.5, label=f"Double pass tracks (n={len(mslp_filt1)})")
+    
     
     # Calculate and plot mean values and standard errors
     mean_tot = np.mean(mslp_tot_min)
     mean_filt1 = np.mean(mslp_filt1_min)
-    mean_filt2 = np.mean(mslp_filt2_min)
     
     std_err_tot = np.std(mslp_tot_min) / np.sqrt(len(mslp_tot_min))
     std_err_filt1 = np.std(mslp_filt1_min) / np.sqrt(len(mslp_filt1_min))
-    std_err_filt2 = np.std(mslp_filt2_min) / np.sqrt(len(mslp_filt2_min))
+
     
     ax.axvline(mean_tot, color='blue', linestyle='dashed', linewidth=1)
     ax.axvline(mean_filt1, color='orange', linestyle='dashed', linewidth=1)
-    ax.axvline(mean_filt2, color='green', linestyle='dashed', linewidth=1)
+
     
     # Add text for mean values and standard errors
     ax.text(mean_tot, ax.get_ylim()[1]*0.9, f'Mean: {mean_tot:.2f} ± {std_err_tot:.2f}', color='blue')
     ax.text(mean_filt1, ax.get_ylim()[1]*0.8, f'Mean: {mean_filt1:.2f} ± {std_err_filt1:.2f}', color='orange')
-    ax.text(mean_filt2, ax.get_ylim()[1]*0.7, f'Mean: {mean_filt2:.2f} ± {std_err_filt2:.2f}', color='green')
     
-    ax.set_title(f"MSLP anomaly distribution for tracks between ({lat_min}-{lat_max}°N, {lon_min}-{lon_max}°E) for ERA5")
+    
+    ax.set_title(f"MSLP anomaly distribution for between ({lat_min}-{lat_max}°N, {lon_min}-{lon_max}°E) for ERA5 - SON")
     ax.set_xlabel("Max mslp anomaly (hPa)")
     ax.set_ylabel("PDF")
     ax.legend()
@@ -198,14 +191,16 @@ def plot_mslp_pdf(mslp_tot, mslp_filt1, mslp_filt2, plotdir, lon_min, lon_max, l
     if not os.path.exists(plotdir):
         os.makedirs(plotdir)
     
-    plt.savefig(plotdir+"mslp_pdf_vaialike_ERA5.png")
+    plt.savefig(plotdir+"mslp_pdf_doubplepass_ERA5.png")
     plt.close()
-    print("saved plot in:", plotdir+"mslp_pdf_vaialike_ERA5.png")
+    print("saved plot in:", plotdir+"mslp_pdf_doublepass_ERA5.png")
     
 
 ERA5_total_tracks = read_ERA5_tracks(ERA5_total_tracks_dir)
-ERA5_vaiagen_tracks = read_ERA5_tracks(ERA5_track_dir_vaia_analogue, filename="concatenated_tracks_latgen38_longen4_radgen4.txt")
-ERA5_vaiagen_vaiapass_tracks = read_ERA5_tracks(ERA5_track_dir_vaia_analogue, filename="concatenated_tracks_latgen38_longen4_radgen4_latpas45_lonpas8_radpas2.txt")
+#ERA5_vaiagen_tracks = read_ERA5_tracks(ERA5_track_dir_vaia_analogue, filename="concatenated_tracks_latgen38_longen4_radgen4.txt")
+#ERA5_vaiagen_vaiapass_tracks = read_ERA5_tracks(ERA5_track_dir_vaia_analogue, filename="concatenated_tracks_latgen38_longen4_radgen4_latpas45_lonpas8_radpas2.txt")
+
+ERA5_doublepass = read_ERA5_tracks(ERA5_track_dir_vaia_analogue, filename="concatenated_tracks_firstlatpass38_firstlonpass4_firstrad4_secondlatpass45_secondlonpass8_secondrad4_1940-2024.txt")
 
 #set lats and lons for the spatial filter
 lon_min = 0
@@ -214,7 +209,8 @@ lat_min = 30
 lat_max = 48
 
 ERA5_total_tracks = spatial_filter_tracks(ERA5_total_tracks, lon_min, lon_max, lat_min, lat_max)
-ERA5_vaiagen_tracks = spatial_filter_tracks(ERA5_vaiagen_tracks, lon_min, lon_max, lat_min, lat_max)
-ERA5_vaiagen_vaiapass_tracks = spatial_filter_tracks(ERA5_vaiagen_vaiapass_tracks, lon_min, lon_max, lat_min, lat_max)
-plot_mslp_pdf(ERA5_total_tracks,ERA5_vaiagen_tracks, ERA5_vaiagen_vaiapass_tracks,plotdir, lon_min, lon_max, lat_min, lat_max)
+#ERA5_doublepass = spatial_filter_tracks(ERA5_doublepass, lon_min, lon_max, lat_min, lat_max)
+#ERA5_vaiagen_tracks = spatial_filter_tracks(ERA5_vaiagen_tracks, lon_min, lon_max, lat_min, lat_max)
+#ERA5_vaiagen_vaiapass_tracks = spatial_filter_tracks(ERA5_vaiagen_vaiapass_tracks, lon_min, lon_max, lat_min, lat_max)
+plot_mslp_pdf(ERA5_total_tracks, ERA5_doublepass, plotdir, lon_min, lon_max, lat_min, lat_max)
 
